@@ -4,45 +4,44 @@ This document describes the release process for the ArgoCD Envsubst Plugin.
 
 ## Prerequisites
 
-1. **GitHub Token**: You need a personal access token with permissions to:
-   - Push to the charts repository (fredericrous/charts)
-   - Create releases
-   - Push packages to ghcr.io
-
-2. **Set up secrets** in the repository:
-   - `CHARTS_REPO_TOKEN`: PAT with write access to fredericrous/charts
+1. **Set up secrets** in the repository:
+   - `CHARTS_REPO_TOKEN`: PAT with write access to fredericrous/charts (optional, for Helm chart updates)
 
 ## Automated Release Process
 
-The release is fully automated through GitHub Actions:
+The release process follows a two-stage workflow:
 
-1. **Trigger a release**:
+### Stage 1: Docker Release (Automatic)
+
+When you push a tag, the release workflow automatically:
+1. Runs tests
+2. Builds multi-platform Docker images (amd64, arm64)
+3. Pushes images to ghcr.io with semantic version tags
+4. Creates a GitHub release with release notes
+
+### Stage 2: Helm Chart Update (Triggered by Release)
+
+After the GitHub release is published:
+1. The update-helm-chart workflow triggers automatically
+2. Creates a PR in the charts repository with updated chart version
+3. Updates appVersion and image tag in the chart
+
+## Creating a Release
+
+1. **Tag and push**:
    ```bash
-   # For patch release (1.0.0 -> 1.0.1)
-   make release-patch
+   # Create annotated tag
+   git tag -a v1.0.1 -m "Release v1.0.1"
    
-   # For minor release (1.0.0 -> 1.1.0)
-   make release-minor
-   
-   # For major release (1.0.0 -> 2.0.0)
-   make release-major
+   # Push the tag
+   git push origin v1.0.1
    ```
 
-   Or manually via GitHub:
-   - Go to Actions → Bump Version
-   - Click "Run workflow"
-   - Select version type
-   - Click "Run workflow"
-
 2. **What happens automatically**:
-   - Version numbers updated in Chart.yaml
-   - Documentation updated with new version
-   - Git tag created and pushed
-   - Docker image built for multiple platforms (amd64, arm64)
-   - Docker image pushed to ghcr.io
-   - Helm chart packaged
-   - Helm chart published to https://fredericrous.github.io/charts
-   - GitHub release created with installation instructions
+   - Tests run
+   - Docker images built and pushed
+   - GitHub release created
+   - Helm chart PR created in charts repository
 
 ## Manual Release (if needed)
 

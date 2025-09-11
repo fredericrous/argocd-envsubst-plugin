@@ -48,15 +48,6 @@ push-multi: ## Build and push multi-platform image
 package-chart: ## Package Helm chart
 	helm package helm --destination .deploy/
 
-release-patch: ## Create a patch release (X.Y.Z -> X.Y.Z+1)
-	gh workflow run bump-version.yml -f version=patch
-
-release-minor: ## Create a minor release (X.Y.Z -> X.Y+1.0)
-	gh workflow run bump-version.yml -f version=minor
-
-release-major: ## Create a major release (X.Y.Z -> X+1.0.0)
-	gh workflow run bump-version.yml -f version=major
-
 release-notes: ## Generate release notes
 	@echo "## ArgoCD Envsubst Plugin v$(VERSION)"
 	@echo ""
