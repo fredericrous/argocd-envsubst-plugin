@@ -76,6 +76,12 @@ jobs:
             helm repo index . --url https://fredericrous.github.io/charts
           fi
           
+      - name: Force add Helm package
+        working-directory: charts
+        run: |
+          # Force add the .tgz file as it might be ignored by .gitignore
+          git add -f packages/*.tgz
+          
       - name: Create pull request
         uses: peter-evans/create-pull-request@v5
         with:
