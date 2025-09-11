@@ -70,11 +70,8 @@ jobs:
       - name: Update Helm repository index
         working-directory: charts
         run: |
-          helm repo index packages --url https://fredericrous.github.io/charts/packages --merge index.yaml
-          # If index.yaml doesn't exist in root, create it
-          if [ ! -f index.yaml ]; then
-            helm repo index . --url https://fredericrous.github.io/charts
-          fi
+          # Update the index.yaml in the root directory
+          helm repo index . --url https://fredericrous.github.io/charts --merge index.yaml
           
       - name: Force add Helm package
         working-directory: charts
