@@ -100,7 +100,7 @@ jobs:
           repository: fredericrous/charts
           token: ${{ secrets.CHARTS_REPO_TOKEN }}
           path: charts
-          ref: gh-pages
+          ref: main
           
       - name: Copy chart to charts repo
         run: |
