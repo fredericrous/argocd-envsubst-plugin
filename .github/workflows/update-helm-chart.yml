@@ -63,13 +63,18 @@ jobs:
           cd /tmp
           helm package argocd-envsubst-plugin
           
-          # Move to charts repo
-          mv argocd-envsubst-plugin-*.tgz $GITHUB_WORKSPACE/charts/
+          # Move to charts repo packages directory
+          mkdir -p $GITHUB_WORKSPACE/charts/packages
+          mv argocd-envsubst-plugin-*.tgz $GITHUB_WORKSPACE/charts/packages/
 
       - name: Update Helm repository index
         working-directory: charts
         run: |
-          helm repo index . --url https://fredericrous.github.io/charts
+          helm repo index packages --url https://fredericrous.github.io/charts/packages --merge index.yaml
+          # If index.yaml doesn't exist in root, create it
+          if [ ! -f index.yaml ]; then
+            helm repo index . --url https://fredericrous.github.io/charts
+          fi
           
       - name: Create pull request
         uses: peter-evans/create-pull-request@v5
