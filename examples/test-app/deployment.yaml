@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: test-app
+  labels:
+    app: test-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: test-app
+  template:
+    metadata:
+      labels:
+        app: test-app
+    spec:
+      containers:
+      - name: app
+        image: ${TEST_IMAGE:-nginx:latest}
+        ports:
+        - containerPort: 80
+        env:
+        - name: DOMAIN
+          value: ${TEST_DOMAIN}
+        - name: NAMESPACE
+          value: ${TEST_NAMESPACE}

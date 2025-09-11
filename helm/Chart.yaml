@@ -1,0 +1,18 @@
+apiVersion: v2
+name: argocd-envsubst-plugin
+description: ArgoCD Config Management Plugin for environment variable substitution
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - argocd
+  - envsubst
+  - gitops
+  - kustomize
+home: https://github.com/fredericrous/argocd-envsubst-plugin
+sources:
+  - https://github.com/fredericrous/argocd-envsubst-plugin
+maintainers:
+  - name: fredericrous
+    email: fredericrous@users.noreply.github.com
+icon: https://raw.githubusercontent.com/argoproj/argo-cd/master/docs/assets/logo.png

@@ -1,0 +1,54 @@
+# Default values for argocd-envsubst-plugin
+replicaCount: 1
+
+image:
+  repository: ghcr.io/fredericrous/argocd-envsubst-plugin
+  pullPolicy: IfNotPresent
+  tag: ""  # Defaults to chart appVersion
+
+# Environment variables to pass to the plugin
+# These will be available for substitution
+env: {}
+  # CLUSTER_DOMAIN: example.com
+  # VAULT_ADDR: http://vault:8200
+
+# Mount existing secret as environment variables
+envFrom: []
+  # - secretRef:
+  #     name: argocd-env
+
+# Plugin configuration
+plugin:
+  # Discovery rules - when to automatically use this plugin
+  discover:
+    find:
+      # Look for kustomization.yaml files
+      glob: "**/kustomization.yaml"
+  
+resources:
+  limits:
+    memory: 256Mi
+  requests:
+    cpu: 10m
+    memory: 64Mi
+
+# Security context
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 999
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+    - ALL
+
+# Metrics configuration
+metrics:
+  enabled: true
+  service:
+    type: ClusterIP
+    port: 9090
+    annotations: {}
+      # prometheus.io/scrape: "true"
+      # prometheus.io/port: "9090"
+      # prometheus.io/path: "/metrics"

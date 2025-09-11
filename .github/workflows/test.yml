@@ -1,0 +1,65 @@
+name: Test
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test-plugin:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        
+      - name: Make scripts executable
+        run: |
+          chmod +x plugin.sh test.sh test-docker.sh metrics-server.sh
+        
+      - name: Run unit tests
+        run: ./test.sh
+          
+  test-docker:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: false
+          tags: test:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          
+      - name: Make test script executable
+        run: chmod +x test-docker.sh
+        
+      - name: Test Docker image
+        run: ./test-docker.sh
+            
+  test-helm:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        
+      - name: Install Helm
+        uses: azure/setup-helm@v3
+        
+      - name: Lint Helm chart
+        run: |
+          helm lint helm
+          
+      - name: Test Helm template
+        run: |
+          helm template test helm \
+            --set image.tag=test \
+            --set envFrom[0].secretRef.name=argocd-env

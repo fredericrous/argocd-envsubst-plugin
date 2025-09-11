@@ -1,0 +1,65 @@
+# Patch for ArgoCD repo-server to register the sidecar plugin
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: argocd-repo-server
+  namespace: argocd
+spec:
+  template:
+    spec:
+      containers:
+      # Add plugin sidecar
+      - name: envsubst-plugin
+        image: ghcr.io/fredericrous/argocd-envsubst-plugin:latest
+        command: ["/usr/local/bin/start.sh"]
+        ports:
+        - name: metrics
+          containerPort: 9090
+          protocol: TCP
+        # Mount the same env secret
+        envFrom:
+        - secretRef:
+            name: argocd-env
+        env:
+        - name: METRICS_PORT
+          value: "9090"
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 999
+        volumeMounts:
+        - mountPath: /var/run/argocd
+          name: var-files
+        - mountPath: /home/argocd/cmp-server/plugins
+          name: plugins
+        - mountPath: /tmp
+          name: cmp-tmp
+        livenessProbe:
+          httpGet:
+            path: /metrics
+            port: metrics
+          initialDelaySeconds: 10
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /metrics
+            port: metrics
+          initialDelaySeconds: 5
+          periodSeconds: 10
+      # Patch the repo-server container
+      - name: argocd-repo-server
+        volumeMounts:
+        - mountPath: /home/argocd/cmp-server/config/plugin.yaml
+          subPath: plugin.yaml
+          name: cmp-plugin
+      volumes:
+      # Volume for plugin communication
+      - name: var-files
+        emptyDir: {}
+      - name: plugins
+        emptyDir: {}
+      - name: cmp-tmp
+        emptyDir: {}
+      # Mount plugin config
+      - name: cmp-plugin
+        configMap:
+          name: argocd-cmp-plugin

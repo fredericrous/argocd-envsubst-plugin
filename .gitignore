@@ -1,0 +1,27 @@
+# Build artifacts
+.deploy/
+*.tgz
+
+# Test files
+test.yaml
+/kustomization.yaml
+output.yaml
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+
+# Helm dependencies
+helm/charts/
+helm/Chart.lock

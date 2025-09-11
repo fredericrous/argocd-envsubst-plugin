@@ -1,0 +1,38 @@
+# Git
+.git/
+.gitignore
+
+# Documentation
+*.md
+LICENSE
+
+# Tests
+test*.sh
+test/
+examples/
+
+# CI/CD
+.github/
+
+# Build artifacts
+.deploy/
+*.tgz
+
+# Development files
+Makefile
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Helm chart (not needed in Docker image)
+helm/
