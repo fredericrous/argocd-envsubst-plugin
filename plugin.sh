@@ -137,7 +137,7 @@ case "${1:-generate}" in
             if [ -f "kustomization.yaml" ]; then
                 log "Building with kustomize"
                 manifests=$(kustomize build . --enable-helm)
-            elif ls *.yaml *.yml 2>/dev/null | grep -q .; then
+            elif ls *.yaml 2>/dev/null | grep -q . || ls *.yml 2>/dev/null | grep -q .; then
                 log "Processing raw YAML files"
                 manifests=""
                 for file in *.yaml *.yml; do
