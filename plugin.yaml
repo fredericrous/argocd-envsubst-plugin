@@ -2,14 +2,10 @@
 apiVersion: argoproj.io/v1alpha1
 kind: ConfigManagementPlugin
 metadata:
-  name: kustomize-envsubst
+  name: envsubst
 spec:
   version: v1.0
-  # Discovery rules - when to use this plugin
-  discover:
-    find:
-      # Match directories with kustomization.yaml OR any YAML files
-      command: ["sh", "-c", "find . -name 'kustomization.yaml' -o -name '*.yaml' -o -name '*.yml' | head -1"]
-  # How to generate manifests
+  # Plugin must be explicitly specified in Application manifest
+  # No auto-discovery - this follows ArgoCD best practices
   generate:
     command: ["/usr/local/bin/argocd-envsubst-plugin", "generate"]

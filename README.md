@@ -63,6 +63,8 @@ kubectl create secret generic argocd-env \
 
 ### 2. Configure Your Application
 
+The plugin must be explicitly specified in your Application manifest:
+
 ```yaml
 apiVersion: argoproj.io/v1alpha1
 kind: Application
@@ -71,10 +73,12 @@ metadata:
   namespace: argocd
 spec:
   source:
-    plugin:
-      name: kustomize-envsubst
-    path: manifests/my-app
     repoURL: https://github.com/myorg/myrepo
+    targetRevision: main
+    path: manifests/my-app
+    # Explicitly specify the plugin
+    plugin:
+      name: envsubst
 ```
 
 ### 3. Use Variables in Your Manifests
@@ -91,17 +95,14 @@ data:
 
 ## Configuration
 
-### Plugin Discovery
+### Plugin Usage
 
-The plugin automatically activates for:
-- Directories containing `kustomization.yaml`
-- Directories with `.yaml` or `.yml` files
+The plugin must be explicitly enabled in your Application manifest. There is no auto-discovery - this follows ArgoCD best practices for predictable behavior.
 
-To force plugin usage:
 ```yaml
 source:
   plugin:
-    name: kustomize-envsubst
+    name: envsubst
 ```
 
 ### Environment Variables
