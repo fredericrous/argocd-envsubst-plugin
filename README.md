@@ -13,6 +13,7 @@ A Config Management Plugin for ArgoCD that provides dynamic environment variable
 - 💾 **Caching**: Intelligent caching for improved performance
 - 📁 **Flexible**: Supports both Kustomize and raw YAML files
 - 🔤 **Case Support**: Handles uppercase, lowercase, and mixed-case variables
+- 📄 **.env File Support**: Load variables from .env files in your repository
 
 ## Installation
 
@@ -91,6 +92,87 @@ metadata:
 data:
   domain: ${CLUSTER_DOMAIN}
   vault_url: ${VAULT_ADDR}
+```
+
+## .env File Support
+
+The plugin can load environment variables from .env files in your repository, enabling GitOps-friendly configuration:
+
+### Loading Order
+
+The plugin loads .env files in this order (later files override earlier ones):
+
+1. **Environment-specific file**: `/environments/${ENVIRONMENT}.env` (if ENVIRONMENT is set)
+2. **Global .env**: `/.env` from repository root
+3. **App-specific .env**: `./.env` in the application directory
+
+### File Formats
+
+#### Repository Structure
+```
+my-repo/
+├── .env                          # Global defaults
+├── environments/
+│   ├── staging.env              # Staging environment
+│   └── production.env           # Production environment
+└── manifests/
+    └── my-app/
+        ├── .env                 # App-specific overrides
+        └── kustomization.yaml
+```
+
+#### .env File Format
+```bash
+# .env
+DOMAIN=example.com
+CLUSTER_NAME=production
+NAMESPACE=default
+
+# Comments are supported
+VAULT_ADDR=http://vault:8200
+DATABASE_URL=postgres://localhost:5432/myapp
+
+# Quotes are optional
+API_KEY="abc123"
+```
+
+### Custom .env File Location
+
+You can specify a custom .env file location using the ENV_FILE variable:
+
+```yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+spec:
+  source:
+    plugin:
+      name: envsubst
+      env:
+        - name: ENV_FILE
+          value: "/config/production.env"  # Absolute path from repo root
+```
+
+Or for a relative path:
+```yaml
+      env:
+        - name: ENV_FILE
+          value: "config/.env"  # Relative to app directory
+```
+
+### Environment Selection
+
+To use environment-specific files, set the ENVIRONMENT variable:
+
+```yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+spec:
+  source:
+    plugin:
+      name: envsubst
+      env:
+        - name: ENVIRONMENT
+          value: "production"  # Will load /environments/production.env
 ```
 
 ## Configuration

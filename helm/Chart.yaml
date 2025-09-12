@@ -2,8 +2,8 @@ apiVersion: v2
 name: argocd-envsubst-plugin
 description: ArgoCD Config Management Plugin for environment variable substitution
 type: application
-version: 0.1.0
-appVersion: "1.0.0"
+version: 2.1.0
+appVersion: "2.1.0"
 keywords:
   - argocd
   - envsubst
