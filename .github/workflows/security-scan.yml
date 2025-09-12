@@ -11,7 +11,6 @@ on:
 permissions:
   actions: read
   contents: read
-  security-events: write
 
 jobs:
   shellcheck:
@@ -40,16 +39,9 @@ jobs:
       with:
         scan-type: 'fs'
         scan-ref: '.'
-        format: 'sarif'
-        output: 'trivy-fs.sarif'
-        severity: 'CRITICAL,HIGH,MEDIUM'
-
-    - name: Upload Trivy scan results
-      uses: github/codeql-action/upload-sarif@v3
-      if: success() || failure()
-      with:
-        sarif_file: trivy-fs.sarif
-        category: trivy-fs
+        format: 'table'
+        severity: 'CRITICAL,HIGH'
+        exit-code: '1'
 
   dockerfile-lint:
     name: Dockerfile Security Scan
@@ -62,12 +54,5 @@ jobs:
       uses: hadolint/hadolint-action@v3.1.0
       with:
         dockerfile: Dockerfile
-        format: sarif
-        output-file: hadolint.sarif
-
-    - name: Upload hadolint scan results
-      uses: github/codeql-action/upload-sarif@v3
-      if: success() || failure()
-      with:
-        sarif_file: hadolint.sarif
-        category: hadolint
+        format: tty
+        failure-threshold: error
