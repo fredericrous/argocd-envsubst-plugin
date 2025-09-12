@@ -29,25 +29,17 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Processing version: $VERSION"
 
-      - name: Trigger Charts Repository Update
-        env:
-          CHARTS_TOKEN: ${{ secrets.CHARTS_REPO_TOKEN }}
+      - name: Trigger Helm Chart Update
         run: |
-          if [ -z "$CHARTS_TOKEN" ]; then
-            echo "::warning::CHARTS_REPO_TOKEN not set, skipping chart update"
-            exit 0
-          fi
-          
           VERSION="${{ steps.version.outputs.version }}"
-          echo "Triggering chart update for argocd-envsubst-plugin version ${VERSION}"
+          echo "Triggering Helm chart update for version ${VERSION}"
           
-          # Trigger workflow in charts repository
           RESPONSE=$(curl -X POST \
             -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer $CHARTS_TOKEN" \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
-            https://api.github.com/repos/fredericrous/charts/actions/workflows/update-chart.yaml/dispatches \
-            -d "{\"ref\":\"main\",\"inputs\":{\"chart\":\"argocd-envsubst-plugin\",\"version\":\"${VERSION}\",\"app_version\":\"${VERSION}\"}}" \
+            https://api.github.com/repos/${{ github.repository }}/actions/workflows/update-helm-chart.yaml/dispatches \
+            -d "{\"ref\":\"main\",\"inputs\":{\"version\":\"${VERSION}\",\"bump_chart_version\":\"true\"}}" \
             -w "\nHTTP_STATUS:%{http_code}" \
             -s)
           
@@ -55,9 +47,9 @@ jobs:
           BODY=$(echo "$RESPONSE" | sed -n '1,/HTTP_STATUS:/p' | sed '$d')
           
           if [ "$HTTP_STATUS" == "204" ]; then
-            echo "✅ Successfully triggered chart update for version ${VERSION}"
+            echo "✅ Successfully triggered Helm chart update for version ${VERSION}"
           else
-            echo "::error::Failed to trigger chart update"
+            echo "::error::Failed to trigger Helm chart update"
             echo "::error::HTTP Status: $HTTP_STATUS"
             echo "::error::Response: $BODY"
             exit 1
@@ -67,4 +59,4 @@ jobs:
         if: success()
         run: |
           echo "📦 Release v${{ steps.version.outputs.version }} published successfully"
-          echo "📊 Chart update triggered in charts repository"
+          echo "📊 Helm chart update triggered"
