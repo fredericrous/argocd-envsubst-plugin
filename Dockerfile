@@ -16,13 +16,9 @@ RUN chmod +x /usr/local/bin/argocd-envsubst-plugin /usr/local/bin/argocd-envsubs
 # Plugin configuration
 COPY plugin.yaml /home/argocd/cmp-server/config/plugin.yaml
 
-# Create startup script
-RUN echo '#!/bin/sh\n\
-# Start metrics server in background\n\
-/usr/local/bin/argocd-envsubst-metrics &\n\
-# Start plugin server\n\
-exec /var/run/argocd/argocd-cmp-server' > /usr/local/bin/start.sh && \
-    chmod +x /usr/local/bin/start.sh
+# Copy startup script
+COPY start.sh /usr/local/bin/start.sh
+RUN chmod +x /usr/local/bin/start.sh
 
 # Run as non-root
 USER 999

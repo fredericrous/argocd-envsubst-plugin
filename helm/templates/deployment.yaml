@@ -32,12 +32,18 @@ spec:
         {{- end }}
         - name: METRICS_PORT
           value: "9090"
+        {{- if .Values.envFrom }}
         envFrom:
         {{- toYaml .Values.envFrom | nindent 8 }}
+        {{- end }}
+        {{- if .Values.resources }}
         resources:
           {{- toYaml .Values.resources | nindent 10 }}
+        {{- end }}
+        {{- if .Values.securityContext }}
         securityContext:
           {{- toYaml .Values.securityContext | nindent 10 }}
+        {{- end }}
         volumeMounts:
         - name: var-files
           mountPath: /var/run/argocd
