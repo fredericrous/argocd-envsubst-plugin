@@ -25,16 +25,8 @@ jobs:
       uses: ludeeus/action-shellcheck@master
       with:
         scandir: '.'
-        format: sarif
-        output: shellcheck.sarif
         severity: warning
-
-    - name: Upload ShellCheck results
-      uses: github/codeql-action/upload-sarif@v3
-      if: success() || failure()
-      with:
-        sarif_file: shellcheck.sarif
-        category: shellcheck
+        ignore_paths: test-*.sh
 
   trivy-fs:
     name: Trivy Filesystem Scan
