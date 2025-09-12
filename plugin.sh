@@ -83,7 +83,8 @@ substitute_env_vars() {
     local manifests="$1"
     
     # Extract all variable names (just the name part, not the full ${} expression)
-    local vars_found=$(echo "$manifests" | grep -oE '\$\{[a-zA-Z_][a-zA-Z0-9_]*' | sed 's/\${//g' | sort -u)
+    local vars_found
+    vars_found=$(echo "$manifests" | grep -oE '\$\{[a-zA-Z_][a-zA-Z0-9_]*' | sed 's/\${//g' | sort -u)
     
     if [ -z "$vars_found" ]; then
         log "INFO: No variables found in manifests"
@@ -180,7 +181,7 @@ case "${1:-generate}" in
             if [ -f "kustomization.yaml" ]; then
                 log "Building with kustomize"
                 manifests=$(kustomize build . --enable-helm)
-            elif ls *.yaml 2>/dev/null | grep -q . || ls *.yml 2>/dev/null | grep -q .; then
+            elif compgen -G "*.yaml" >/dev/null || compgen -G "*.yml" >/dev/null; then
                 log "Processing raw YAML files"
                 manifests=""
                 for file in *.yaml *.yml; do
