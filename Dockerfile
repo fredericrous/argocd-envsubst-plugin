@@ -1,8 +1,16 @@
 # ArgoCD Envsubst Plugin
 FROM alpine:3.19
 
-# Install required tools
-RUN apk add --no-cache bash gettext curl bc netcat-openbsd
+# Set shell with pipefail
+SHELL ["/bin/ash", "-eo", "pipefail", "-c"]
+
+# Install required tools with pinned versions
+RUN apk add --no-cache \
+    bash=5.2.21-r0 \
+    gettext=0.22.3-r0 \
+    curl=8.12.1-r0 \
+    bc=1.07.1-r4 \
+    netcat-openbsd=1.226-r0
 
 # Install kustomize
 RUN curl -L https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv5.3.0/kustomize_v5.3.0_linux_amd64.tar.gz | \
