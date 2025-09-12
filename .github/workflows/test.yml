@@ -15,13 +15,13 @@ jobs:
         
       - name: Make scripts executable
         run: |
-          chmod +x plugin.sh test.sh test-docker.sh test-env-files.sh metrics-server.sh
+          chmod +x plugin.sh test.sh test-docker.sh test-configmap.sh metrics-server.sh
         
       - name: Run unit tests
         run: ./test.sh
         
-      - name: Run env file tests
-        run: ./test-env-files.sh
+      - name: Run ConfigMap tests
+        run: ./test-configmap.sh
           
   test-docker:
     runs-on: ubuntu-latest

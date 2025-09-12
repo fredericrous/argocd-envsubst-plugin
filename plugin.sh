@@ -13,92 +13,43 @@ log() {
     echo "[argocd-envsubst] $1" >&2
 }
 
-# Function to find repository root
-find_repo_root() {
-    local current_path="${ARGOCD_APP_SOURCE_PATH:-.}"
+
+# Function to load values from ConfigMap or ExternalSecret
+load_env_values() {
+    local loaded=false
     
-    # If no path is set, try to find .git directory
-    if [ "$current_path" = "." ]; then
-        local dir="$PWD"
-        while [ "$dir" != "/" ]; do
-            if [ -d "$dir/.git" ] || [ -f "$dir/.env" ]; then
-                echo "$dir"
-                return 0
-            fi
-            dir=$(dirname "$dir")
-        done
-        echo "$PWD"
+    # Primary: Check if we have ConfigMap values mounted
+    if [ -f "/envsubst-values/values" ]; then
+        log "Loading values from mounted ConfigMap"
+        set -a  # Export all variables
+        source "/envsubst-values/values"
+        set +a
+        loaded=true
+    fi
+    
+    # Fallback: Check if we have ExternalSecret values mounted
+    # This would be created by External Secrets Operator after initial deployment
+    if [ -f "/envsubst-values-external/values" ]; then
+        if [ "$loaded" = true ]; then
+            log "Loading additional values from ExternalSecret (fallback)"
+        else
+            log "Loading values from ExternalSecret (ConfigMap not found)"
+        fi
+        set -a  # Export all variables
+        source "/envsubst-values-external/values"
+        set +a
+        loaded=true
+    fi
+    
+    if [ "$loaded" = false ]; then
+        log "WARNING: No values found at /envsubst-values/values or /envsubst-values-external/values"
+        log "Make sure either argocd-envsubst-values ConfigMap or argocd-envsubst-values-external Secret exists"
+        log "Using only environment variables already present in the container"
+        # Continue with existing environment variables only
         return 0
     fi
     
-    # Calculate how many levels up based on ARGOCD_APP_SOURCE_PATH
-    local levels=$(echo "$current_path" | tr '/' '\n' | grep -v '^$' | wc -l)
-    local repo_root="."
-    for ((i=0; i<levels; i++)); do
-        repo_root="../$repo_root"
-    done
-    
-    # Normalize the path
-    echo "$(cd "$repo_root" 2>/dev/null && pwd)" || echo "$repo_root"
-}
-
-# Function to load .env files
-load_env_files() {
-    local repo_root=$(find_repo_root)
-    local env_loaded=false
-    
-    # Check for ENV_FILE environment variable
-    if [ -n "${ENV_FILE:-}" ]; then
-        local env_file="$ENV_FILE"
-        
-        # Handle absolute paths from repo root
-        if [[ "$env_file" =~ ^/ ]]; then
-            env_file="${repo_root}${env_file}"
-        fi
-        
-        if [ -f "$env_file" ]; then
-            log "Loading environment from: $env_file"
-            set -a  # Export all variables
-            source "$env_file"
-            set +a
-            env_loaded=true
-        else
-            log "WARNING: ENV_FILE specified but not found: $env_file"
-        fi
-    else
-        # Load environment files in order of precedence
-        
-        # 1. Check for environment-specific file
-        if [ -n "${ENVIRONMENT:-}" ] && [ -f "${repo_root}/environments/${ENVIRONMENT}.env" ]; then
-            log "Loading environment: ${ENVIRONMENT}"
-            set -a
-            source "${repo_root}/environments/${ENVIRONMENT}.env"
-            set +a
-            env_loaded=true
-        fi
-        
-        # 2. Load global .env from repo root
-        if [ -f "${repo_root}/.env" ]; then
-            log "Loading global .env"
-            set -a
-            source "${repo_root}/.env"
-            set +a
-            env_loaded=true
-        fi
-        
-        # 3. Load app-specific .env (overrides global)
-        if [ -f ".env" ]; then
-            log "Loading app-specific .env"
-            set -a
-            source ".env"
-            set +a
-            env_loaded=true
-        fi
-    fi
-    
-    if [ "$env_loaded" = false ]; then
-        log "INFO: No .env files found, using only existing environment variables"
-    fi
+    return 0
 }
 
 # Function to update metrics
@@ -210,8 +161,8 @@ case "${1:-generate}" in
     generate)
         log "Generating manifests with environment substitution"
         
-        # Load .env files first
-        load_env_files
+        # Load values from ConfigMap
+        load_env_values
         
         start_time=$(date +%s.%N 2>/dev/null || date +%s)
         

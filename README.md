@@ -5,15 +5,15 @@ A Config Management Plugin for ArgoCD that provides dynamic environment variable
 ## Features
 
 - 🔍 **Auto-detection**: Automatically finds `${VARIABLE}` patterns in your manifests
-- 🔄 **Dynamic substitution**: Only substitutes variables that exist in the environment
+- 🔄 **Dynamic substitution**: Only substitutes variables that exist in the ConfigMap
 - ⚠️  **Validation**: Warns about missing variables
 - 🚀 **Zero configuration**: No need to maintain lists of variables
-- 🔒 **Secure**: Only substitutes variables you explicitly provide
+- 🔒 **Secure**: Only substitutes variables from the mounted ConfigMap
 - 📊 **Metrics**: Prometheus-compatible metrics endpoint
 - 💾 **Caching**: Intelligent caching for improved performance
 - 📁 **Flexible**: Supports both Kustomize and raw YAML files
 - 🔤 **Case Support**: Handles uppercase, lowercase, and mixed-case variables
-- 📄 **.env File Support**: Load variables from .env files in your repository
+- 📦 **ConfigMap Support**: Reads values from mounted argocd-envsubst-values ConfigMap
 
 ## Installation
 
@@ -46,25 +46,25 @@ kubectl patch deployment argocd-repo-server -n argocd --patch-file argocd-repo-s
 
 ## Usage
 
-### 1. Create a Secret with Your Environment Variables
+### 1. Create a ConfigMap with Your Environment Variables
 
 ```bash
-kubectl create secret generic argocd-env \
+kubectl create configmap argocd-envsubst-values \
   --namespace argocd \
-  --from-literal=CLUSTER_DOMAIN=example.com \
-  --from-literal=VAULT_ADDR=http://vault:8200
+  --from-literal=ARGO_CLUSTER_DOMAIN=example.com \
+  --from-literal=ARGO_VAULT_ADDR=http://vault:8200
 ```
 
-Or from a `.env` file:
+Or from your filtered environment file:
 ```bash
-kubectl create secret generic argocd-env \
+# Filter only ARGO_ prefixed variables
+grep "^ARGO_" .env > /tmp/argo-values.env
+kubectl create configmap argocd-envsubst-values \
   --namespace argocd \
-  --from-env-file=.env
+  --from-env-file=/tmp/argo-values.env
 ```
 
 ### 2. Configure Your Application
-
-The plugin must be explicitly specified in your Application manifest:
 
 ```yaml
 apiVersion: argoproj.io/v1alpha1
@@ -74,12 +74,14 @@ metadata:
   namespace: argocd
 spec:
   source:
-    repoURL: https://github.com/myorg/myrepo
+    repoURL: https://github.com/your-org/your-repo
     targetRevision: main
     path: manifests/my-app
-    # Explicitly specify the plugin
     plugin:
       name: envsubst
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: my-app
 ```
 
 ### 3. Use Variables in Your Manifests
@@ -90,274 +92,178 @@ kind: ConfigMap
 metadata:
   name: app-config
 data:
-  domain: ${CLUSTER_DOMAIN}
-  vault_url: ${VAULT_ADDR}
+  domain: ${ARGO_CLUSTER_DOMAIN}
+  vault_url: ${ARGO_VAULT_ADDR}
 ```
 
-## .env File Support
+## ConfigMap and ExternalSecret Support
 
-The plugin can load environment variables from .env files in your repository, enabling GitOps-friendly configuration:
+The plugin reads environment variables from two sources for resilience:
 
-### Loading Order
+### ConfigMap Structure
 
-The plugin loads .env files in this order (later files override earlier ones):
-
-1. **Environment-specific file**: `/environments/${ENVIRONMENT}.env` (if ENVIRONMENT is set)
-2. **Global .env**: `/.env` from repository root
-3. **App-specific .env**: `./.env` in the application directory
-
-### File Formats
-
-#### Repository Structure
-```
-my-repo/
-├── .env                          # Global defaults
-├── environments/
-│   ├── staging.env              # Staging environment
-│   └── production.env           # Production environment
-└── manifests/
-    └── my-app/
-        ├── .env                 # App-specific overrides
-        └── kustomization.yaml
-```
-
-#### .env File Format
-```bash
-# .env
-DOMAIN=example.com
-CLUSTER_NAME=production
-NAMESPACE=default
-
-# Comments are supported
-VAULT_ADDR=http://vault:8200
-DATABASE_URL=postgres://localhost:5432/myapp
-
-# Quotes are optional
-API_KEY="abc123"
-```
-
-### Custom .env File Location
-
-You can specify a custom .env file location using the ENV_FILE variable:
+The plugin expects a ConfigMap named `argocd-envsubst-values` in the `argocd` namespace:
 
 ```yaml
-apiVersion: argoproj.io/v1alpha1
-kind: Application
-spec:
-  source:
-    plugin:
-      name: envsubst
-      env:
-        - name: ENV_FILE
-          value: "/config/production.env"  # Absolute path from repo root
-```
-
-Or for a relative path:
-```yaml
-      env:
-        - name: ENV_FILE
-          value: "config/.env"  # Relative to app directory
-```
-
-### Environment Selection
-
-To use environment-specific files, set the ENVIRONMENT variable:
-
-```yaml
-apiVersion: argoproj.io/v1alpha1
-kind: Application
-spec:
-  source:
-    plugin:
-      name: envsubst
-      env:
-        - name: ENVIRONMENT
-          value: "production"  # Will load /environments/production.env
-```
-
-## Configuration
-
-### Plugin Usage
-
-The plugin must be explicitly enabled in your Application manifest. There is no auto-discovery - this follows ArgoCD best practices for predictable behavior.
-
-```yaml
-source:
-  plugin:
-    name: envsubst
-```
-
-### Environment Variables
-
-Pass variables through:
-
-1. **Secret reference** (recommended):
-```yaml
-envFrom:
-- secretRef:
-    name: argocd-env
-```
-
-2. **Direct values**:
-```yaml
-env:
-  CLUSTER_DOMAIN: example.com
-```
-
-## Advanced Usage
-
-### Custom Variable Patterns
-
-The plugin supports standard shell variable syntax:
-- `${VARIABLE}` - Basic substitution (uppercase, lowercase, mixed-case)
-- `${VARIABLE:-default}` - With default value
-- `${VARIABLE:?error}` - Fail if not set
-
-### Performance Tuning
-
-Configure caching behavior:
-```yaml
-env:
-  ARGOCD_ENV_CACHE_DIR: "/tmp/argocd-envsubst-cache"
-  ARGOCD_ENV_CACHE_TTL: "300"  # 5 minutes
-```
-
-### Metrics
-
-The plugin exposes Prometheus metrics on port 9090:
-- `argocd_envsubst_plugin_info` - Plugin version
-- `argocd_envsubst_substitutions_total` - Total substitutions
-- `argocd_envsubst_errors_total` - Total errors
-- `argocd_envsubst_cache_hits_total` - Cache hit rate
-- `argocd_envsubst_processing_duration_seconds` - Processing time histogram
-
-Access metrics:
-```bash
-kubectl port-forward -n argocd deployment/argocd-repo-server 9090:9090
-curl http://localhost:9090/metrics
-```
-
-### Debugging
-
-Enable debug logging:
-```yaml
-env:
-  PLUGIN_DEBUG: "true"
-```
-
-Check logs:
-```bash
-kubectl logs -n argocd deployment/argocd-repo-server -c envsubst-plugin
-```
-
-## Testing
-
-The plugin includes comprehensive tests to ensure reliability:
-
-### Unit Tests
-
-Run the unit tests to verify basic functionality:
-
-```bash
-make test-unit
-# or
-./test.sh
-```
-
-Tests include:
-- Basic variable substitution
-- Missing variable handling
-- Default value syntax (`${VAR:-default}`)
-- Complex manifests with multiple variables
-- Special characters in values
-- Empty variable patterns
-- Performance with large manifests
-
-### Docker Tests
-
-Test the containerized plugin:
-
-```bash
-make test-docker
-# or
-./test-docker.sh
-```
-
-### Manual Testing
-
-1. **Test substitution logic**:
-```bash
-# Create test files
-cat > kustomization.yaml <<EOF
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-resources:
-- test.yaml
-EOF
-
-cat > test.yaml <<EOF
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: test
+  name: argocd-envsubst-values
+  namespace: argocd
 data:
-  domain: \${DOMAIN}
-EOF
-
-# Run plugin
-export DOMAIN=example.com
-./plugin.sh generate
+  values: |-
+    ARGO_DOMAIN=example.com
+    ARGO_CLUSTER_NAME=production
+    ARGO_DB_HOST=postgres.example.com
+    ARGO_REPLICAS=3
 ```
 
-2. **Test in Docker**:
+### Initial Setup
+
+1. **Create the ConfigMap** from your environment file:
 ```bash
-docker run --rm \
-  -v $(pwd):/workdir \
-  -w /workdir \
-  -e DOMAIN=example.com \
-  ghcr.io/fredericrous/argocd-envsubst-plugin:latest \
-  /usr/local/bin/argocd-envsubst-plugin generate
+# Filter only ARGO_ prefixed variables
+grep "^ARGO_" .env > /tmp/argo-values.env
+
+# Create or update the ConfigMap
+kubectl create configmap argocd-envsubst-values \
+  --namespace argocd \
+  --from-env-file=/tmp/argo-values.env \
+  --dry-run=client -o yaml | kubectl apply -f -
 ```
 
-## Development
+2. **After deployment**, backup to Vault for resilience:
+```bash
+# This stores values in Vault at secret/argocd/env-values
+./scripts/backup-argocd-values-to-vault.sh
+```
 
-### Building the Plugin
+3. **ExternalSecret** automatically syncs from Vault:
+```yaml
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: argocd-envsubst-values-external
+  namespace: argocd
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: vault-backend
+    kind: ClusterSecretStore
+  target:
+    name: argocd-envsubst-values-external
+  dataFrom:
+    - extract:
+        key: secret/argocd/env-values
+```
+
+### Value Sources
+
+1. **Primary**: ConfigMap mounted at `/envsubst-values/values`
+   - Used during initial deployment
+   - Fast access, no external dependencies
+   - Lost if etcd fails
+
+2. **Fallback**: Secret mounted at `/envsubst-values-external/values`
+   - Created by External Secrets Operator from Vault
+   - Survives etcd failures
+   - Automatically synced from Vault
+
+Both sources are automatically mounted through the ArgoCD repo server deployment configuration.
+
+### Variable Naming Convention
+
+It's recommended to prefix your variables with `ARGO_` to clearly distinguish them from other environment variables and secrets:
 
 ```bash
-# Build locally
-make build
+# Good - clearly identifies ArgoCD template variables
+ARGO_EXTERNAL_DOMAIN=example.com
+ARGO_CLUSTER_NAME=production
+ARGO_VAULT_ADDR=http://vault:8200
 
-# Build for multiple platforms
-make build-multi
-
-# Push to registry
-make push
+# Avoid - could conflict with system variables
+DOMAIN=example.com
+CLUSTER=production
 ```
 
-### Testing Locally
+## Variable Substitution Behavior
 
+### Default Values
+
+You can specify default values for variables that might not be set:
+
+```yaml
+replicas: ${REPLICAS:-3}
+namespace: ${NAMESPACE:-default}
+```
+
+### Validation
+
+The plugin will:
+- ✅ Substitute variables that exist in the ConfigMap
+- ⚠️  Warn about variables that are not defined
+- 🔒 Preserve variables that don't exist (won't substitute with empty string)
+
+## Advanced Features
+
+### Caching
+
+The plugin caches processed manifests for improved performance:
+- Default TTL: 5 minutes
+- Cache key: Based on manifest content hash
+- Configurable via `ARGOCD_ENV_CACHE_TTL` environment variable
+
+### Metrics
+
+Prometheus metrics are available at `/metrics`:
+- `argocd_envsubst_substitutions_total`: Total number of substitutions
+- `argocd_envsubst_cache_hits_total`: Cache hit count
+- `argocd_envsubst_processing_duration_seconds`: Processing time histogram
+
+## Troubleshooting
+
+### Variables Not Being Substituted
+
+1. Check the ConfigMap exists:
 ```bash
-# Run all tests
-make test
-
-# Run specific tests
-make test-unit
-make test-docker
+kubectl get configmap argocd-envsubst-values -n argocd -o yaml
 ```
+
+2. Verify the variable is in the ConfigMap:
+```bash
+kubectl get configmap argocd-envsubst-values -n argocd -o jsonpath='{.data.values}' | grep YOUR_VARIABLE
+```
+
+3. Check plugin logs:
+```bash
+kubectl logs -n argocd deployment/argocd-repo-server -c envsubst
+```
+
+### Common Issues
+
+**Issue**: "WARNING: No values found at /envsubst-values/values or /envsubst-values-external/values"
+- **Solution**: Ensure either the ConfigMap `argocd-envsubst-values` or Secret `argocd-envsubst-values-external` exists in the `argocd` namespace
+
+**Issue**: Variables showing as `${VARIABLE}` in deployed manifests
+- **Solution**: The variable is not defined in either ConfigMap or Secret. Add it or use a default value
+
+**Issue**: Values not updating after ConfigMap change
+- **Solution**: Restart ArgoCD repo server: `kubectl rollout restart deployment/argocd-repo-server -n argocd`
+
+**Issue**: ExternalSecret not syncing
+- **Solution**: Check External Secrets Operator logs and ensure Vault path `secret/argocd/env-values` exists
 
 ## Security Considerations
 
-- Only variables explicitly provided to the plugin are available for substitution
-- The plugin runs with minimal privileges
-- Sensitive values should be stored in Kubernetes secrets
+- The plugin only reads from the mounted ConfigMap, not from arbitrary files
+- Variables are validated to prevent shell injection
+- Sensitive data should use Kubernetes Secrets, not ConfigMaps
+- Use RBAC to control who can modify the ConfigMap
 
 ## Contributing
 
-1. Fork the repository
-2. Create your feature branch
-3. Test your changes
-4. Submit a pull request
+Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
 ## License
 
-MIT License - see LICENSE file for details
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
