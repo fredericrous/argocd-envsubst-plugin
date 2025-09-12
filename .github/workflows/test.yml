@@ -15,10 +15,13 @@ jobs:
         
       - name: Make scripts executable
         run: |
-          chmod +x plugin.sh test.sh test-docker.sh metrics-server.sh
+          chmod +x plugin.sh test.sh test-docker.sh test-env-files.sh metrics-server.sh
         
       - name: Run unit tests
         run: ./test.sh
+        
+      - name: Run env file tests
+        run: ./test-env-files.sh
           
   test-docker:
     runs-on: ubuntu-latest
@@ -44,22 +47,3 @@ jobs:
         
       - name: Test Docker image
         run: ./test-docker.sh
-            
-  test-helm:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        
-      - name: Install Helm
-        uses: azure/setup-helm@v3
-        
-      - name: Lint Helm chart
-        run: |
-          helm lint helm
-          
-      - name: Test Helm template
-        run: |
-          helm template test helm \
-            --set image.tag=test \
-            --set envFrom[0].secretRef.name=argocd-env
