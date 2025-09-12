@@ -73,8 +73,9 @@ output=$(docker run --rm \
   -e DATABASE_URL=postgres://db:5432/myapp \
   -e API_URL=https://api.example.com \
   -e CLUSTER_DOMAIN=example.com \
+  --entrypoint /usr/local/bin/argocd-envsubst-plugin \
   argocd-envsubst-plugin:test \
-  /usr/local/bin/argocd-envsubst-plugin generate)
+  generate)
 
 if echo "$output" | grep -q "namespace: production" && \
    echo "$output" | grep -q "image: ghcr.io/myorg/myapp:v1.2.3" && \
@@ -95,8 +96,9 @@ output=$(docker run --rm \
   -v "$(pwd)":/workdir \
   -w /workdir \
   -e CLUSTER_DOMAIN=test.local \
+  --entrypoint /usr/local/bin/argocd-envsubst-plugin \
   argocd-envsubst-plugin:test \
-  /usr/local/bin/argocd-envsubst-plugin generate)
+  generate)
 
 if echo "$output" | grep -q "namespace: default" && \
    echo "$output" | grep -q "log_level: info" && \
@@ -114,8 +116,9 @@ rm -f kustomization.yaml
 output=$(docker run --rm \
   -v "$(pwd)":/workdir \
   -w /workdir \
+  --entrypoint /usr/local/bin/argocd-envsubst-plugin \
   argocd-envsubst-plugin:test \
-  /usr/local/bin/argocd-envsubst-plugin generate 2>&1 || true)
+  generate 2>&1 || true)
 
 if echo "$output" | grep -qi "no kustomization.yaml found\|error\|not found"; then
     echo -e "${GREEN}✅ PASS${NC}"
