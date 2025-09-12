@@ -67,6 +67,7 @@ output=$(docker run --rm \
   -v "$(pwd)":/workdir:ro \
   -w /workdir \
   --user "$(id -u):$(id -g)" \
+  -e ARGOCD_ENVSUBST_STRICT=false \
   -e NAMESPACE=production \
   -e IMAGE_REGISTRY=ghcr.io \
   -e IMAGE_NAME=myorg/myapp \
@@ -97,6 +98,7 @@ output=$(docker run --rm \
   -v "$(pwd)":/workdir:ro \
   -w /workdir \
   --user "$(id -u):$(id -g)" \
+  -e ARGOCD_ENVSUBST_STRICT=false \
   -e CLUSTER_DOMAIN=test.local \
   --entrypoint /usr/local/bin/argocd-envsubst-plugin \
   argocd-envsubst-plugin:test \
@@ -119,6 +121,7 @@ output=$(docker run --rm \
   -v "$(pwd)":/workdir:ro \
   -w /workdir \
   --user "$(id -u):$(id -g)" \
+  -e ARGOCD_ENVSUBST_STRICT=false \
   --entrypoint /usr/local/bin/argocd-envsubst-plugin \
   argocd-envsubst-plugin:test \
   generate 2>&1 || true)

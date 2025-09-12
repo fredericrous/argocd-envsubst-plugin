@@ -7,6 +7,8 @@ set -euo pipefail
 CACHE_DIR="${ARGOCD_ENV_CACHE_DIR:-/tmp/argocd-envsubst-cache}"
 CACHE_TTL="${ARGOCD_ENV_CACHE_TTL:-300}" # 5 minutes default
 METRICS_FILE="/tmp/argocd-envsubst-metrics"
+# Strict mode - fail if no ConfigMap/Secret found (default: true, set to false for tests)
+STRICT_MODE="${ARGOCD_ENVSUBST_STRICT:-true}"
 
 # Function to log messages
 log() {
@@ -42,11 +44,22 @@ load_env_values() {
     fi
     
     if [ "$loaded" = false ]; then
-        log "WARNING: No values found at /envsubst-values/values or /envsubst-values-external/values"
-        log "Make sure either argocd-envsubst-values ConfigMap or argocd-envsubst-values-external Secret exists"
-        log "Using only environment variables already present in the container"
-        # Continue with existing environment variables only
-        return 0
+        if [ "$STRICT_MODE" = "true" ]; then
+            log "ERROR: No values found at /envsubst-values/values or /envsubst-values-external/values"
+            log "Either argocd-envsubst-values ConfigMap or argocd-envsubst-values-external Secret must exist"
+            log ""
+            log "To fix this, create a ConfigMap with your environment variables:"
+            log "  kubectl create configmap argocd-envsubst-values \\"
+            log "    --namespace argocd \\"
+            log "    --from-env-file=/tmp/argo-values.env"
+            log ""
+            log "Or ensure the ExternalSecret is properly configured and syncing from Vault"
+            log "To disable this check (not recommended for production), set ARGOCD_ENVSUBST_STRICT=false"
+            exit 1
+        else
+            log "WARNING: No values found at /envsubst-values/values or /envsubst-values-external/values"
+            log "Strict mode disabled - using only environment variables already present in the container"
+        fi
     fi
     
     return 0
@@ -171,12 +184,42 @@ case "${1:-generate}" in
         cache_key=$(find . -type f \( -name "*.yaml" -o -name "*.yml" \) -exec md5sum {} \; | sort | md5sum | cut -d' ' -f1)
         cache_file="$CACHE_DIR/$cache_key"
         
-        # Check cache
-        if [ -f "$cache_file" ] && [ $(($(date +%s) - $(stat -c %Y "$cache_file" 2>/dev/null || stat -f %m "$cache_file" 2>/dev/null || echo 0))) -lt $CACHE_TTL ]; then
-            log "Using cached manifests"
-            update_metric "argocd_envsubst_cache_hits_total" 1
-            manifests=$(cat "$cache_file")
+        # Determine lock directory - use /var/lock if it exists and is writable, otherwise use temp dir
+        if [ -d "/var/lock" ] && [ -w "/var/lock" ]; then
+            lock_file="/var/lock/envsubst-cache-${cache_key}.lock"
         else
+            # Use the same directory as the cache for lock files
+            lock_file="$CACHE_DIR/envsubst-cache-${cache_key}.lock"
+        fi
+        
+        # Use file locking if available to prevent race conditions
+        if command -v flock >/dev/null 2>&1; then
+            (
+                flock -x 200
+                
+                # Check cache with lock held
+                if [ -f "$cache_file" ] && [ $(($(date +%s) - $(stat -c %Y "$cache_file" 2>/dev/null || stat -f %m "$cache_file" 2>/dev/null || echo 0))) -lt $CACHE_TTL ]; then
+                    log "Using cached manifests"
+                    update_metric "argocd_envsubst_cache_hits_total" 1
+                    manifests=$(cat "$cache_file")
+                    cache_hit=true
+                else
+                    cache_hit=false
+                fi
+            ) 200>"$lock_file"
+        else
+            # No flock available (e.g., macOS), check cache without lock
+            if [ -f "$cache_file" ] && [ $(($(date +%s) - $(stat -c %Y "$cache_file" 2>/dev/null || stat -f %m "$cache_file" 2>/dev/null || echo 0))) -lt $CACHE_TTL ]; then
+                log "Using cached manifests"
+                update_metric "argocd_envsubst_cache_hits_total" 1
+                manifests=$(cat "$cache_file")
+                cache_hit=true
+            else
+                cache_hit=false
+            fi
+        fi
+        
+        if [ "$cache_hit" = false ]; then
             # Generate manifests based on what's available
             if [ -f "kustomization.yaml" ]; then
                 log "Building with kustomize"
@@ -201,8 +244,17 @@ $(cat "$file")"
             
             # Create cache directory if needed
             mkdir -p "$CACHE_DIR"
-            # Save to cache
-            echo "$manifests" > "$cache_file"
+            
+            # Save to cache with lock if available
+            if command -v flock >/dev/null 2>&1; then
+                (
+                    flock -x 200
+                    echo "$manifests" > "$cache_file"
+                ) 200>"$lock_file"
+            else
+                # No flock available, save without lock
+                echo "$manifests" > "$cache_file"
+            fi
         fi
         
         result=$(substitute_env_vars "$manifests")

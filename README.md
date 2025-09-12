@@ -188,6 +188,19 @@ CLUSTER=production
 
 ## Variable Substitution Behavior
 
+### Variable Name Format
+
+The plugin recognizes environment variables matching the pattern: `[a-zA-Z_][a-zA-Z0-9_]*`
+
+This means:
+- Must start with a letter (a-z, A-Z) or underscore (_)
+- Can contain letters, numbers, and underscores
+- Cannot contain dots, hyphens, or other special characters
+
+Examples:
+- ✅ Valid: `DOMAIN`, `APP_NAME`, `_PRIVATE`, `VAR123`
+- ❌ Invalid: `app-name`, `app.domain`, `123VAR`, `var-with-hyphen`
+
 ### Default Values
 
 You can specify default values for variables that might not be set:
@@ -203,6 +216,24 @@ The plugin will:
 - ✅ Substitute variables that exist in the ConfigMap
 - ⚠️  Warn about variables that are not defined
 - 🔒 Preserve variables that don't exist (won't substitute with empty string)
+- ❌ Exit with error if both ConfigMap and Secret are missing
+
+## Limitations
+
+### ConfigMap Size Limit
+
+Kubernetes ConfigMaps have a **1MB size limit**. This includes all keys and values combined.
+
+To estimate your ConfigMap size:
+```bash
+grep "^ARGO_" .env | wc -c
+```
+
+If you're approaching the limit:
+1. Review and remove unused variables
+2. Use shorter variable names
+3. Consider splitting into multiple ConfigMaps (requires plugin modification)
+4. Store large values in Vault and reference them via ExternalSecrets
 
 ## Advanced Features
 
@@ -212,6 +243,15 @@ The plugin caches processed manifests for improved performance:
 - Default TTL: 5 minutes
 - Cache key: Based on manifest content hash
 - Configurable via `ARGOCD_ENV_CACHE_TTL` environment variable
+- Thread-safe with file locking to prevent race conditions
+
+### Strict Mode
+
+The plugin runs in strict mode by default, which requires either ConfigMap or Secret to be present:
+- Default: `ARGOCD_ENVSUBST_STRICT=true` (recommended for production)
+- To disable: `ARGOCD_ENVSUBST_STRICT=false` (only for testing)
+
+In strict mode, the plugin will exit with an error if neither ConfigMap nor Secret is found.
 
 ### Metrics
 
@@ -241,8 +281,13 @@ kubectl logs -n argocd deployment/argocd-repo-server -c envsubst
 
 ### Common Issues
 
-**Issue**: "WARNING: No values found at /envsubst-values/values or /envsubst-values-external/values"
-- **Solution**: Ensure either the ConfigMap `argocd-envsubst-values` or Secret `argocd-envsubst-values-external` exists in the `argocd` namespace
+**Issue**: "ERROR: No values found at /envsubst-values/values or /envsubst-values-external/values"
+- **Solution**: The plugin now requires either ConfigMap or Secret to exist. Create the ConfigMap with:
+  ```bash
+  kubectl create configmap argocd-envsubst-values \
+    --namespace argocd \
+    --from-env-file=/tmp/argo-values.env
+  ```
 
 **Issue**: Variables showing as `${VARIABLE}` in deployed manifests
 - **Solution**: The variable is not defined in either ConfigMap or Secret. Add it or use a default value

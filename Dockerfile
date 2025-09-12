@@ -31,7 +31,8 @@ RUN chmod +x /usr/local/bin/start.sh
 # Create necessary directories (user 999 already exists in some Alpine images)
 RUN mkdir -p /home/argocd/cmp-server/config && \
     mkdir -p /var/run/argocd && \
-    chown -R 999:999 /home/argocd /var/run/argocd
+    mkdir -p /var/lock && \
+    chown -R 999:999 /home/argocd /var/run/argocd /var/lock
 
 # Run as non-root
 USER 999

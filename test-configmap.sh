@@ -12,6 +12,9 @@ echo -e "${YELLOW}Testing ConfigMap mode...${NC}"
 # This test validates that the plugin works without a mounted ConfigMap
 # The plugin should continue with environment variables only
 
+# Disable strict mode for tests
+export ARGOCD_ENVSUBST_STRICT=false
+
 # Create test directory
 TEST_DIR=$(mktemp -d)
 cd "$TEST_DIR"

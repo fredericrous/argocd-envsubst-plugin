@@ -16,6 +16,9 @@ TESTS_FAILED=0
 PLUGIN_DIR=$(dirname "$0")
 PLUGIN_SCRIPT="$PLUGIN_DIR/plugin.sh"
 
+# Disable strict mode for tests
+export ARGOCD_ENVSUBST_STRICT=false
+
 # Ensure plugin script exists and is executable
 if [ ! -f "$PLUGIN_SCRIPT" ]; then
     echo -e "${RED}ERROR: plugin.sh not found at $PLUGIN_SCRIPT${NC}"

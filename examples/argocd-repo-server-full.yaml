@@ -1,4 +1,5 @@
-# Patch for ArgoCD repo-server to register the sidecar plugin
+# Complete example of ArgoCD repo server with envsubst plugin
+# This shows all required volumes and mounts
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -8,7 +9,16 @@ spec:
   template:
     spec:
       containers:
-      # Add plugin sidecar
+      # Main repo server container
+      - name: argocd-repo-server
+        # ... existing configuration ...
+        volumeMounts:
+        # ... existing mounts ...
+        - mountPath: /home/argocd/cmp-server/config/plugin.yaml
+          subPath: plugin.yaml
+          name: cmp-plugin
+      
+      # Envsubst plugin sidecar
       - name: envsubst-plugin
         image: ghcr.io/fredericrous/argocd-envsubst-plugin:latest
         command: ["/usr/local/bin/start.sh"]
@@ -16,16 +26,13 @@ spec:
         - name: metrics
           containerPort: 9090
           protocol: TCP
-        # Mount the same env secret
-        envFrom:
-        - secretRef:
-            name: argocd-env
         env:
         - name: METRICS_PORT
           value: "9090"
         securityContext:
           runAsNonRoot: true
           runAsUser: 999
+          readOnlyRootFilesystem: false # Required for cache and locks
         resources:
           requests:
             cpu: 50m
@@ -34,17 +41,21 @@ spec:
             cpu: 200m
             memory: 256Mi
         volumeMounts:
+        # Required for ArgoCD CMP
         - mountPath: /var/run/argocd
           name: var-files
         - mountPath: /home/argocd/cmp-server/plugins
           name: plugins
         - mountPath: /tmp
           name: cmp-tmp
+        # For file locking
         - mountPath: /var/lock
           name: lock-dir
+        # ConfigMap with ARGO_ variables
         - mountPath: /envsubst-values
           name: envsubst-values
           readOnly: true
+        # ExternalSecret fallback
         - mountPath: /envsubst-values-external
           name: envsubst-values-external
           readOnly: true
@@ -60,14 +71,11 @@ spec:
             port: metrics
           initialDelaySeconds: 5
           periodSeconds: 10
-      # Patch the repo-server container
-      - name: argocd-repo-server
-        volumeMounts:
-        - mountPath: /home/argocd/cmp-server/config/plugin.yaml
-          subPath: plugin.yaml
-          name: cmp-plugin
+      
       volumes:
-      # Volume for plugin communication
+      # ... existing volumes ...
+      
+      # Volumes for plugin communication
       - name: var-files
         emptyDir: {}
       - name: plugins
@@ -76,17 +84,37 @@ spec:
         emptyDir: {}
       - name: lock-dir
         emptyDir: {}
-      # Mount plugin config
+      
+      # Plugin configuration
       - name: cmp-plugin
         configMap:
           name: argocd-cmp-plugin
+      
       # ConfigMap with environment values
       - name: envsubst-values
         configMap:
           name: argocd-envsubst-values
-          optional: true
+          optional: true # Set to false if you want to enforce its existence
+      
       # Secret with environment values (ExternalSecret fallback)
       - name: envsubst-values-external
         secret:
           secretName: argocd-envsubst-values-external
           optional: true
+---
+# ConfigMap for plugin configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-cmp-plugin
+  namespace: argocd
+data:
+  plugin.yaml: |
+    apiVersion: argoproj.io/v1alpha1
+    kind: ConfigManagementPlugin
+    metadata:
+      name: envsubst
+    spec:
+      version: v1.0
+      generate:
+        command: ["/usr/local/bin/argocd-envsubst-plugin", "generate"]
