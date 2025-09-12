@@ -195,21 +195,24 @@ case "${1:-generate}" in
             lock_file="$CACHE_DIR/envsubst-cache-${cache_key}.lock"
         fi
         
+        # Initialize cache_hit variable
+        cache_hit=false
+        
         # Use file locking if available to prevent race conditions
         if command -v flock >/dev/null 2>&1; then
-            (
-                flock -x 200
-                
-                # Check cache with lock held
-                if [ -f "$cache_file" ] && [ $(($(date +%s) - $(stat -c %Y "$cache_file" 2>/dev/null || stat -f %m "$cache_file" 2>/dev/null || echo 0))) -lt $CACHE_TTL ]; then
-                    log "Using cached manifests"
-                    update_metric "argocd_envsubst_cache_hits_total" 1
-                    manifests=$(cat "$cache_file")
-                    cache_hit=true
-                else
-                    cache_hit=false
-                fi
-            ) 200>"$lock_file"
+            exec 200>"$lock_file"
+            flock -x 200
+            
+            # Check cache with lock held
+            if [ -f "$cache_file" ] && [ $(($(date +%s) - $(stat -c %Y "$cache_file" 2>/dev/null || stat -f %m "$cache_file" 2>/dev/null || echo 0))) -lt $CACHE_TTL ]; then
+                log "Using cached manifests"
+                update_metric "argocd_envsubst_cache_hits_total" 1
+                manifests=$(cat "$cache_file")
+                cache_hit=true
+            fi
+            
+            # Release lock
+            exec 200>&-
         else
             # No flock available (e.g., macOS), check cache without lock
             if [ -f "$cache_file" ] && [ $(($(date +%s) - $(stat -c %Y "$cache_file" 2>/dev/null || stat -f %m "$cache_file" 2>/dev/null || echo 0))) -lt $CACHE_TTL ]; then
@@ -217,8 +220,6 @@ case "${1:-generate}" in
                 update_metric "argocd_envsubst_cache_hits_total" 1
                 manifests=$(cat "$cache_file")
                 cache_hit=true
-            else
-                cache_hit=false
             fi
         fi
         
@@ -247,10 +248,10 @@ $(cat "$file")"
             
             # Save to cache with lock if available
             if command -v flock >/dev/null 2>&1; then
-                (
-                    flock -x 200
-                    echo "$manifests" > "$cache_file"
-                ) 200>"$lock_file"
+                exec 200>"$lock_file"
+                flock -x 200
+                echo "$manifests" > "$cache_file"
+                exec 200>&-
             else
                 # No flock available, save without lock
                 echo "$manifests" > "$cache_file"
