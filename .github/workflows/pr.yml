@@ -33,9 +33,9 @@ jobs:
 
       - name: Run tests
         run: |
-          chmod +x test.sh test-docker.sh test-env-files.sh
+          chmod +x test.sh test-docker.sh test-configmap.sh
           ./test.sh
-          ./test-env-files.sh
+          ./test-configmap.sh
 
   build:
     name: Build Docker Image
