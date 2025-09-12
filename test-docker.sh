@@ -64,8 +64,9 @@ EOF
 # Run tests
 echo -e "\n${YELLOW}Test 1: Basic substitution${NC}"
 output=$(docker run --rm \
-  -v "$(pwd)":/workdir \
+  -v "$(pwd)":/workdir:ro \
   -w /workdir \
+  --user $(id -u):$(id -g) \
   -e NAMESPACE=production \
   -e IMAGE_REGISTRY=ghcr.io \
   -e IMAGE_NAME=myorg/myapp \
@@ -93,8 +94,9 @@ fi
 
 echo -e "\n${YELLOW}Test 2: Missing variables with defaults${NC}"
 output=$(docker run --rm \
-  -v "$(pwd)":/workdir \
+  -v "$(pwd)":/workdir:ro \
   -w /workdir \
+  --user $(id -u):$(id -g) \
   -e CLUSTER_DOMAIN=test.local \
   --entrypoint /usr/local/bin/argocd-envsubst-plugin \
   argocd-envsubst-plugin:test \
@@ -114,8 +116,9 @@ fi
 echo -e "\n${YELLOW}Test 3: Error handling - no kustomization.yaml${NC}"
 rm -f kustomization.yaml
 output=$(docker run --rm \
-  -v "$(pwd)":/workdir \
+  -v "$(pwd)":/workdir:ro \
   -w /workdir \
+  --user $(id -u):$(id -g) \
   --entrypoint /usr/local/bin/argocd-envsubst-plugin \
   argocd-envsubst-plugin:test \
   generate 2>&1 || true)

@@ -20,6 +20,12 @@ COPY plugin.yaml /home/argocd/cmp-server/config/plugin.yaml
 COPY start.sh /usr/local/bin/start.sh
 RUN chmod +x /usr/local/bin/start.sh
 
+# Create argocd user and necessary directories
+RUN adduser -D -u 999 -g 999 argocd && \
+    mkdir -p /home/argocd/cmp-server/config && \
+    mkdir -p /var/run/argocd && \
+    chown -R argocd:argocd /home/argocd /var/run/argocd
+
 # Run as non-root
 USER 999
 
