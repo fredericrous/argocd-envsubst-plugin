@@ -309,6 +309,3 @@ kubectl logs -n argocd deployment/argocd-repo-server -c envsubst
 
 Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
