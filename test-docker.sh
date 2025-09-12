@@ -113,7 +113,7 @@ else
     exit 1
 fi
 
-echo -e "\n${YELLOW}Test 3: Error handling - no kustomization.yaml${NC}"
+echo -e "\n${YELLOW}Test 3: Raw YAML processing - no kustomization.yaml${NC}"
 rm -f kustomization.yaml
 output=$(docker run --rm \
   -v "$(pwd)":/workdir:ro \
@@ -123,11 +123,13 @@ output=$(docker run --rm \
   argocd-envsubst-plugin:test \
   generate 2>&1 || true)
 
-if echo "$output" | grep -qi "no kustomization.yaml found\|error\|not found"; then
+if echo "$output" | grep -q "Processing raw YAML files" && \
+   echo "$output" | grep -q "namespace: default" && \
+   echo "$output" | grep -q "log_level: info"; then
     echo -e "${GREEN}✅ PASS${NC}"
 else
     echo -e "${RED}❌ FAIL${NC}"
-    echo "Expected error about missing kustomization.yaml"
+    echo "Expected raw YAML processing with defaults"
     echo "Output:"
     echo "$output"
     exit 1
