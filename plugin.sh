@@ -180,6 +180,9 @@ case "${1:-generate}" in
         
         start_time=$(date +%s.%N 2>/dev/null || date +%s)
         
+        # Create cache directory if needed
+        mkdir -p "$CACHE_DIR"
+        
         # Calculate cache key based on directory content
         cache_key=$(find . -type f \( -name "*.yaml" -o -name "*.yml" \) -exec md5sum {} \; | sort | md5sum | cut -d' ' -f1)
         cache_file="$CACHE_DIR/$cache_key"
@@ -241,9 +244,6 @@ $(cat "$file")"
                 log "ERROR: No YAML files found in directory"
                 exit 1
             fi
-            
-            # Create cache directory if needed
-            mkdir -p "$CACHE_DIR"
             
             # Save to cache with lock if available
             if command -v flock >/dev/null 2>&1; then
