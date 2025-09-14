@@ -16,6 +16,10 @@ RUN apk add --no-cache \
 RUN curl -L https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv5.3.0/kustomize_v5.3.0_linux_amd64.tar.gz | \
     tar xz -C /usr/local/bin/
 
+# Install helm
+RUN curl -L https://get.helm.sh/helm-v3.16.3-linux-amd64.tar.gz | \
+    tar xz && mv linux-amd64/helm /usr/local/bin/ && rm -rf linux-amd64
+
 # Create plugin scripts
 COPY plugin.sh /usr/local/bin/argocd-envsubst-plugin
 COPY metrics-server.sh /usr/local/bin/argocd-envsubst-metrics
