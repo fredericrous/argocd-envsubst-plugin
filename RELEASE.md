@@ -5,7 +5,7 @@ This document describes the release process for the ArgoCD Envsubst Plugin.
 ## Prerequisites
 
 1. **Set up secrets** in the repository:
-   - `CHARTS_REPO_TOKEN`: PAT with write access to fredericrous/charts (optional, for Helm chart updates)
+   - No additional secrets required for releases
 
 ## Automated Release Process
 
@@ -19,12 +19,6 @@ When you push a tag, the release workflow automatically:
 3. Pushes images to ghcr.io with semantic version tags
 4. Creates a GitHub release with release notes
 
-### Stage 2: Helm Chart Update (Triggered by Release)
-
-After the GitHub release is published:
-1. The update-helm-chart workflow triggers automatically
-2. Creates a PR in the charts repository with updated chart version
-3. Updates appVersion and image tag in the chart
 
 ## Creating a Release
 
@@ -41,15 +35,12 @@ After the GitHub release is published:
    - Tests run
    - Docker images built and pushed
    - GitHub release created
-   - Helm chart PR created in charts repository
 
 ## Manual Release (if needed)
 
 1. **Update versions**:
    ```bash
-   # Update Chart version
-   sed -i 's/^version: .*/version: X.Y.Z/' helm/Chart.yaml
-   sed -i 's/^appVersion: .*/appVersion: vX.Y.Z/' helm/Chart.yaml
+   # No version files to update - just tag and release
    ```
 
 2. **Commit and tag**:
@@ -72,17 +63,11 @@ The `.github/workflows/release.yml` handles:
 - Tags with semantic versioning (vX.Y.Z, vX.Y, vX)
 - Pushes to ghcr.io/fredericrous/argocd-envsubst-plugin
 
-### 2. Helm Chart Release
-- Updates image tag in values.yaml
-- Packages the Helm chart
-- Publishes to https://fredericrous.github.io/charts
-- Updates the Helm repository index
-
-### 3. GitHub Release
+### 2. GitHub Release
 - Creates a release with:
   - Auto-generated changelog
   - Installation instructions
-  - Links to Docker image and Helm chart
+  - Links to Docker image
 
 ## Versioning Strategy
 
@@ -115,12 +100,7 @@ We follow semantic versioning:
 
 After release:
 1. Update homelab to use the new version
-2. Test the Helm installation:
-   ```bash
-   helm repo update
-   helm search repo fredericrous/argocd-envsubst-plugin
-   ```
-3. Monitor for any issues
+2. Monitor for any issues
 
 ## Rollback
 

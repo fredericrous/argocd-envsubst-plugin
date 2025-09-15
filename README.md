@@ -17,31 +17,72 @@ A Config Management Plugin for ArgoCD that provides dynamic environment variable
 
 ## Installation
 
-### Option 1: Helm Chart
+### Configure as Sidecar in ArgoCD Helm Values
 
-```bash
-helm repo add fredericrous https://fredericrous.github.io/charts
-helm install argocd-envsubst fredericrous/argocd-envsubst-plugin \
-  --namespace argocd \
-  --set envFrom[0].secretRef.name=argocd-env
+Add the plugin as a sidecar container in your ArgoCD Helm values:
+
+```yaml
+repoServer:
+  extraContainers:
+    - name: envsubst
+      image: ghcr.io/fredericrous/argocd-envsubst-plugin:3.0.6
+      command: ["/usr/local/bin/start.sh"]
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop:
+            - ALL
+      resources:
+        requests:
+          cpu: 50m
+          memory: 64Mi
+        limits:
+          cpu: 200m
+          memory: 256Mi
+      volumeMounts:
+        - mountPath: /var/run/argocd
+          name: var-files
+        - mountPath: /home/argocd/cmp-server/config
+          name: cmp-server-config
+        - mountPath: /tmp
+          name: cmp-tmp
+        - mountPath: /envsubst-values
+          name: envsubst-values
+          readOnly: true
+  volumes:
+    - name: cmp-server-config
+      configMap:
+        name: argocd-envsubst-plugin-config
+    - name: cmp-tmp
+      emptyDir: {}
+    - name: envsubst-values
+      configMap:
+        name: argocd-envsubst-values
+        optional: true
 ```
 
-### Option 2: Kustomize Patch
+Then create the plugin configuration:
 
 ```bash
-kubectl apply -k https://github.com/fredericrous/argocd-envsubst-plugin/kustomize
-```
-
-### Option 3: Manual Installation
-
-1. Apply the ConfigMap plugin (for v1 plugins):
-```bash
-kubectl apply -f argocd-cm-plugin.yaml
-```
-
-2. Or install as sidecar (v2 plugin):
-```bash
-kubectl patch deployment argocd-repo-server -n argocd --patch-file argocd-repo-server-patch.yaml
+kubectl apply -f - <<EOF
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-envsubst-plugin-config
+  namespace: argocd
+data:
+  plugin.yaml: |
+    apiVersion: argoproj.io/v1alpha1
+    kind: ConfigManagementPlugin
+    metadata:
+      name: argocd-envsubst-plugin
+    spec:
+      generate:
+        command: ["/usr/local/bin/argocd-envsubst-plugin"]
+        args: ["generate"]
+EOF
 ```
 
 ## Usage
