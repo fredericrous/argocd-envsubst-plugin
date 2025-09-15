@@ -5,7 +5,12 @@ metadata:
   name: argocd-envsubst-plugin
 spec:
   version: v1.0
-  # Plugin must be explicitly specified in Application manifest
-  # No auto-discovery - this follows ArgoCD best practices
+  # Discovery rules to ensure all files are available to the plugin
+  discover:
+    find:
+      glob: "**/kustomization.yaml"
   generate:
     command: ["/usr/local/bin/argocd-envsubst-plugin", "generate"]
+  # Preserve all files when copying to plugin
+  # This ensures kustomization.yaml and other files are available
+  preserveFileMode: true

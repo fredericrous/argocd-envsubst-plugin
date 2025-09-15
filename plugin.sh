@@ -118,6 +118,23 @@ substitute_env_vars() {
 case "${1:-generate}" in
     generate)
         log "Generating manifests with environment substitution"
+        log "Working directory: $(pwd)"
+        log "Files in directory: $(ls -la 2>&1 | head -5)"
+        
+        # More detailed debugging
+        if [ ! -f "kustomization.yaml" ]; then
+            log "WARNING: kustomization.yaml not found!"
+            log "Checking for kustomization files:"
+            find . -name "kustomization*.yaml" -o -name "Kustomization" 2>&1 | head -10
+            log "All YAML files in directory:"
+            ls -la *.yaml *.yml 2>/dev/null | head -20 || log "No YAML files found"
+            
+            # Check parent directories
+            log "Checking parent directory:"
+            ls -la ../ | head -10
+            log "Checking if we're in a subdirectory:"
+            basename "$(pwd)"
+        fi
         
         # Load values from ConfigMap
         if ! load_env_values; then
@@ -127,7 +144,25 @@ case "${1:-generate}" in
         # Generate manifests
         if [ -f "kustomization.yaml" ]; then
             log "Building with kustomize"
-            manifests=$(kustomize build . --enable-helm)
+            # Capture both stdout and stderr separately
+            kustomize_output=$(mktemp)
+            kustomize_error=$(mktemp)
+            if kustomize build . --enable-helm >"$kustomize_output" 2>"$kustomize_error"; then
+                manifests=$(cat "$kustomize_output")
+                rm -f "$kustomize_output" "$kustomize_error"
+            else
+                log "ERROR: kustomize build failed"
+                if [ -s "$kustomize_error" ]; then
+                    log "STDERR output:"
+                    cat "$kustomize_error" >&2
+                fi
+                if [ -s "$kustomize_output" ]; then
+                    log "STDOUT output (first 500 chars):"
+                    head -c 500 "$kustomize_output" >&2
+                fi
+                rm -f "$kustomize_output" "$kustomize_error"
+                exit 1
+            fi
         elif compgen -G "*.yaml" >/dev/null || compgen -G "*.yml" >/dev/null; then
             log "Processing raw YAML files"
             manifests=""
