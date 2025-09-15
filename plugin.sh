@@ -96,8 +96,9 @@ substitute_env_vars() {
     local manifests="$1"
     
     # Extract all variable names (just the name part, not the full ${} expression)
+    # This regex matches both ${VAR} and ${VAR:-default} patterns
     local vars_found
-    vars_found=$(echo "$manifests" | grep -oE '\$\{[a-zA-Z_][a-zA-Z0-9_]*' | sed 's/\${//g' | sort -u)
+    vars_found=$(echo "$manifests" | grep -oE '\$\{[a-zA-Z_][a-zA-Z0-9_]*(\}|:-)' | sed 's/\${\|}\|:-//g' | sort -u)
     
     if [ -z "$vars_found" ]; then
         log "INFO: No variables found in manifests"
@@ -227,7 +228,45 @@ case "${1:-generate}" in
             # Generate manifests based on what's available
             if [ -f "kustomization.yaml" ]; then
                 log "Building with kustomize"
+                # Initialize values_files variable
+                values_files=""
+                # Check if we have Helm charts referenced
+                if grep -q "helmCharts:" kustomization.yaml 2>/dev/null; then
+                    log "Helm charts detected, including CRDs"
+                    # Set environment variable for Helm to include CRDs
+                    export HELM_INCLUDE_CRDS=1
+                    
+                    # Process values files for environment variable substitution
+                    # Find all valuesFile references in kustomization.yaml
+                    values_files=$(grep -E "^\s*valuesFile:" kustomization.yaml | sed 's/.*valuesFile:\s*//')
+                    
+                    if [ -n "$values_files" ]; then
+                        log "Processing Helm values files for variable substitution"
+                        for values_file in $values_files; do
+                            if [ -f "$values_file" ]; then
+                                log "Substituting variables in $values_file"
+                                # Create a temporary file with substituted values
+                                temp_file="${values_file}.tmp"
+                                envsubst < "$values_file" > "$temp_file"
+                                # Replace the original file temporarily
+                                mv "$values_file" "${values_file}.orig"
+                                mv "$temp_file" "$values_file"
+                            fi
+                        done
+                    fi
+                fi
+                
+                # Build with kustomize
                 manifests=$(kustomize build . --enable-helm)
+                
+                # Restore original values files if they were modified
+                if [ -n "$values_files" ]; then
+                    for values_file in $values_files; do
+                        if [ -f "${values_file}.orig" ]; then
+                            mv "${values_file}.orig" "$values_file"
+                        fi
+                    done
+                fi
             elif compgen -G "*.yaml" >/dev/null || compgen -G "*.yml" >/dev/null; then
                 log "Processing raw YAML files"
                 manifests=""
