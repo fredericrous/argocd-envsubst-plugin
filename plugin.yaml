@@ -2,7 +2,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: ConfigManagementPlugin
 metadata:
-  name: envsubst
+  name: argocd-envsubst-plugin
 spec:
   version: v1.0
   # Plugin must be explicitly specified in Application manifest
