@@ -3,11 +3,13 @@
 # This plugin substitutes environment variables in Kubernetes manifests
 # Values come from a ConfigMap created dynamically during deployment
 
-set -euo pipefail
+# Use safer bash options but not -e which exits on any error
+set -uo pipefail
 
 # Set HOME to a writable directory for helm
-export HOME=$(mktemp -d /tmp/argocd-envsubst-home.XXXXXX)
-trap "rm -rf $HOME" EXIT
+HOME=$(mktemp -d /tmp/argocd-envsubst-home.XXXXXX)
+export HOME
+trap 'rm -rf "$HOME"' EXIT
 
 # Function to log messages
 log() {
@@ -20,6 +22,7 @@ load_env_values() {
     if [ -f "/envsubst-values/values" ]; then
         log "Loading values from ConfigMap"
         set -a  # Export all variables
+        # shellcheck source=/dev/null
         source "/envsubst-values/values"
         set +a
         return 0
@@ -51,7 +54,7 @@ substitute_env_vars() {
         return 0
     fi
     
-    log "Variables found: $(echo $vars_found | tr '\n' ' ')"
+    log "Variables found: $(echo "$vars_found" | tr '\n' ' ')"
     
     # Build list of variables that exist in environment
     local vars_to_substitute=""
@@ -72,7 +75,8 @@ substitute_env_vars() {
     if [ -n "$vars_to_substitute" ]; then
         log "Substituting variables:$vars_to_substitute"
         # First pass: substitute only defined variables
-        local result=$(echo "$manifests" | envsubst "$vars_to_substitute")
+        local result
+        result=$(echo "$manifests" | envsubst "$vars_to_substitute")
         
         # Second pass: handle ${VAR:-default} syntax for undefined variables
         # Process line by line to handle defaults safely
@@ -112,80 +116,105 @@ substitute_env_vars() {
             echo "$line"
         done <<< "$manifests"
     fi
+    return 0
 }
 
 # Main execution
-case "${1:-generate}" in
-    generate)
-        log "Generating manifests with environment substitution"
-        log "Working directory: $(pwd)"
-        log "Files in directory: $(ls -la 2>&1 | head -5)"
-        
-        # More detailed debugging
-        if [ ! -f "kustomization.yaml" ]; then
-            log "WARNING: kustomization.yaml not found!"
-            log "Checking for kustomization files:"
-            find . -name "kustomization*.yaml" -o -name "Kustomization" 2>&1 | head -10
-            log "All YAML files in directory:"
-            ls -la *.yaml *.yml 2>/dev/null | head -20 || log "No YAML files found"
+main() {
+    case "${1:-generate}" in
+        generate)
+            log "Generating manifests with environment substitution"
+            log "Working directory: $(pwd)"
+            # shellcheck disable=SC2012
+            log "Files in directory: $(ls -la 2>&1 | head -5)"
             
-            # Check parent directories
-            log "Checking parent directory:"
-            ls -la ../ | head -10
-            log "Checking if we're in a subdirectory:"
-            basename "$(pwd)"
-        fi
-        
-        # Load values from ConfigMap
-        if ! load_env_values; then
-            exit 1
-        fi
-        
-        # Generate manifests
-        if [ -f "kustomization.yaml" ]; then
-            log "Building with kustomize"
-            # Capture both stdout and stderr separately
-            kustomize_output=$(mktemp)
-            kustomize_error=$(mktemp)
-            if kustomize build . --enable-helm >"$kustomize_output" 2>"$kustomize_error"; then
-                manifests=$(cat "$kustomize_output")
-                rm -f "$kustomize_output" "$kustomize_error"
-            else
-                log "ERROR: kustomize build failed"
-                if [ -s "$kustomize_error" ]; then
-                    log "STDERR output:"
-                    cat "$kustomize_error" >&2
+            # More detailed debugging
+            if [ ! -f "kustomization.yaml" ]; then
+                log "WARNING: kustomization.yaml not found!"
+                log "Checking for kustomization files:"
+                find . -name "kustomization*.yaml" -o -name "Kustomization" 2>&1 | head -10
+                log "All YAML files in current directory:"
+                # shellcheck disable=SC2012
+                ls -la *.yaml 2>/dev/null | head -20 || true
+                # shellcheck disable=SC2012
+                ls -la *.yml 2>/dev/null | head -20 || true
+                
+                # If no files shown above, check subdirectories
+                if ! ls *.yaml *.yml 2>/dev/null | head -1 >/dev/null; then
+                    log "Checking subdirectories for YAML files:"
+                    find . -name "*.yaml" -o -name "*.yml" | grep -v "^\\./\\." | head -20 || log "No YAML files found anywhere"
                 fi
-                if [ -s "$kustomize_output" ]; then
-                    log "STDOUT output (first 500 chars):"
-                    head -c 500 "$kustomize_output" >&2
-                fi
-                rm -f "$kustomize_output" "$kustomize_error"
-                exit 1
+                
+                # Check parent directories
+                log "Checking parent directory:"
+                # shellcheck disable=SC2012
+                ls -la ../ | head -10
+                log "Checking if we're in a subdirectory:"
+                basename "$(pwd)"
             fi
-        elif compgen -G "*.yaml" >/dev/null || compgen -G "*.yml" >/dev/null; then
-            log "Processing raw YAML files"
-            manifests=""
-            for file in *.yaml *.yml; do
-                [ -f "$file" ] || continue
-                if [ -n "$manifests" ]; then
-                    manifests="$manifests
+            
+            # Load values from ConfigMap
+            if ! load_env_values; then
+                return 1
+            fi
+            
+            # Generate manifests
+            if [ -f "kustomization.yaml" ]; then
+                log "Building with kustomize"
+                # Capture both stdout and stderr separately
+                kustomize_output=$(mktemp)
+                kustomize_error=$(mktemp)
+                if kustomize build . --enable-helm >"$kustomize_output" 2>"$kustomize_error"; then
+                    manifests=$(cat "$kustomize_output")
+                    rm -f "$kustomize_output" "$kustomize_error"
+                else
+                    log "ERROR: kustomize build failed"
+                    if [ -s "$kustomize_error" ]; then
+                        log "STDERR output:"
+                        cat "$kustomize_error" >&2
+                    fi
+                    if [ -s "$kustomize_output" ]; then
+                        log "STDOUT output (first 500 chars):"
+                        head -c 500 "$kustomize_output" >&2
+                    fi
+                    rm -f "$kustomize_output" "$kustomize_error"
+                    return 1
+                fi
+            else
+                # Check for raw YAML files (including subdirectories)
+                yaml_files=$(find . -name "*.yaml" -o -name "*.yml" | grep -v "^\\./\\." | sort)
+                if [ -n "$yaml_files" ]; then
+                    log "Processing raw YAML files"
+                    manifests=""
+                    for file in $yaml_files; do
+                        log "Processing file: $file"
+                        if [ -n "$manifests" ]; then
+                            manifests="$manifests
 ---
 $(cat "$file")"
+                        else
+                            manifests=$(cat "$file")
+                        fi
+                    done
                 else
-                    manifests=$(cat "$file")
+                    log "No YAML files found in directory"
+                    # Return empty output - ArgoCD will handle this gracefully
+                    echo "---"
+                    return 0
                 fi
-            done
-        else
-            log "ERROR: No YAML files found"
-            exit 1
-        fi
-        
-        # Substitute variables
-        substitute_env_vars "$manifests"
-        ;;
-    *)
-        log "Unknown command: $1"
-        exit 1
-        ;;
-esac
+            fi
+            
+            # Substitute variables
+            substitute_env_vars "$manifests"
+            return 0
+            ;;
+        *)
+            log "Unknown command: $1"
+            return 1
+            ;;
+    esac
+}
+
+# Call main function and exit with its return code
+main "$@"
+exit $?

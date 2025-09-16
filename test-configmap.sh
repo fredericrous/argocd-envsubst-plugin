@@ -45,16 +45,23 @@ export TEST_VAR="test-value"
 # Run plugin
 echo -e "\n${YELLOW}Test: ConfigMap mode (no mounted ConfigMap)${NC}"
 PLUGIN_SCRIPT="$OLDPWD/plugin.sh"
+# Allow the plugin to exit with non-zero code since we're in test mode
+set +e
 output=$("$PLUGIN_SCRIPT" generate 2>&1)
+exit_code=$?
+set -e
 
-if echo "$output" | grep -q "test_var: test-value" && \
+# In test mode, we expect the plugin to work even without ConfigMap
+if [ $exit_code -eq 0 ] && \
+   echo "$output" | grep -q "test_var: test-value" && \
    echo "$output" | grep -q "with_default: default-value" && \
-   echo "$output" | grep -q "WARNING: No values found"; then
+   echo "$output" | grep -q "WARNING: ConfigMap not found, using environment variables"; then
     echo -e "${GREEN}✅ PASS${NC} - Plugin works without ConfigMap in test mode"
 else
     echo -e "${RED}❌ FAIL${NC}"
     echo "Output:"
     echo "$output"
+    echo "Exit code: $exit_code"
     exit 1
 fi
 
