@@ -193,6 +193,7 @@ $(cat "$file")"
         
         # Substitute variables
         substitute_env_vars "$manifests"
+        exit 0
         ;;
     *)
         log "Unknown command: $1"
