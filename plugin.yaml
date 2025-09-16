@@ -1,0 +1,19 @@
+# ArgoCD Config Management Plugin v2 specification
+apiVersion: argoproj.io/v1alpha1
+kind: ConfigManagementPlugin
+metadata:
+  name: argocd-envsubst-plugin
+spec:
+  # Discovery rules - only use plugin for files with ARGO_ variables
+  discover:
+    find:
+      command:
+        - sh
+        - -c
+        - |
+          find . -name '*.yaml' -o -name '*.yml' | xargs grep -l '\${ARGO_' 2>/dev/null | head -1
+  generate:
+    command: ["/usr/local/bin/argocd-envsubst-plugin", "generate"]
+  # Preserve all files when copying to plugin
+  # This ensures kustomization.yaml and other files are available
+  preserveFileMode: true
