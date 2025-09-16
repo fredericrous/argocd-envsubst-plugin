@@ -6,8 +6,9 @@
 set -euo pipefail
 
 # Set HOME to a writable directory for helm
-export HOME=$(mktemp -d /tmp/argocd-envsubst-home.XXXXXX)
-trap "rm -rf $HOME" EXIT
+HOME=$(mktemp -d /tmp/argocd-envsubst-home.XXXXXX)
+export HOME
+trap 'rm -rf "$HOME"' EXIT
 
 # Function to log messages
 log() {
@@ -20,6 +21,7 @@ load_env_values() {
     if [ -f "/envsubst-values/values" ]; then
         log "Loading values from ConfigMap"
         set -a  # Export all variables
+        # shellcheck source=/dev/null
         source "/envsubst-values/values"
         set +a
         return 0
@@ -51,7 +53,7 @@ substitute_env_vars() {
         return 0
     fi
     
-    log "Variables found: $(echo $vars_found | tr '\n' ' ')"
+    log "Variables found: $(echo "$vars_found" | tr '\n' ' ')"
     
     # Build list of variables that exist in environment
     local vars_to_substitute=""
@@ -72,7 +74,8 @@ substitute_env_vars() {
     if [ -n "$vars_to_substitute" ]; then
         log "Substituting variables:$vars_to_substitute"
         # First pass: substitute only defined variables
-        local result=$(echo "$manifests" | envsubst "$vars_to_substitute")
+        local result
+        result=$(echo "$manifests" | envsubst "$vars_to_substitute")
         
         # Second pass: handle ${VAR:-default} syntax for undefined variables
         # Process line by line to handle defaults safely
@@ -112,6 +115,7 @@ substitute_env_vars() {
             echo "$line"
         done <<< "$manifests"
     fi
+    return 0
 }
 
 # Main execution
@@ -119,6 +123,7 @@ case "${1:-generate}" in
     generate)
         log "Generating manifests with environment substitution"
         log "Working directory: $(pwd)"
+        # shellcheck disable=SC2012
         log "Files in directory: $(ls -la 2>&1 | head -5)"
         
         # More detailed debugging
@@ -127,6 +132,7 @@ case "${1:-generate}" in
             log "Checking for kustomization files:"
             find . -name "kustomization*.yaml" -o -name "Kustomization" 2>&1 | head -10
             log "All YAML files in current directory:"
+            # shellcheck disable=SC2012,SC2035
             if ! ls -la *.yaml *.yml 2>/dev/null | head -20; then
                 log "No YAML files in current directory (checking subdirectories)"
                 log "YAML files in subdirectories:"
@@ -135,6 +141,7 @@ case "${1:-generate}" in
             
             # Check parent directories
             log "Checking parent directory:"
+            # shellcheck disable=SC2012
             ls -la ../ | head -10
             log "Checking if we're in a subdirectory:"
             basename "$(pwd)"
