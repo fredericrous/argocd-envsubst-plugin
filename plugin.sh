@@ -3,7 +3,8 @@
 # This plugin substitutes environment variables in Kubernetes manifests
 # Values come from a ConfigMap created dynamically during deployment
 
-set -euo pipefail
+# Use safer bash options but not -e which exits on any error
+set -uo pipefail
 
 # Set HOME to a writable directory for helm
 HOME=$(mktemp -d /tmp/argocd-envsubst-home.XXXXXX)
@@ -133,10 +134,14 @@ main() {
                 log "Checking for kustomization files:"
                 find . -name "kustomization*.yaml" -o -name "Kustomization" 2>&1 | head -10
                 log "All YAML files in current directory:"
-                # shellcheck disable=SC2012,SC2035
-                if ! ls -la *.yaml *.yml 2>/dev/null | head -20; then
-                    log "No YAML files in current directory (checking subdirectories)"
-                    log "YAML files in subdirectories:"
+                # shellcheck disable=SC2012
+                ls -la *.yaml 2>/dev/null | head -20 || true
+                # shellcheck disable=SC2012
+                ls -la *.yml 2>/dev/null | head -20 || true
+                
+                # If no files shown above, check subdirectories
+                if ! ls *.yaml *.yml 2>/dev/null | head -1 >/dev/null; then
+                    log "Checking subdirectories for YAML files:"
                     find . -name "*.yaml" -o -name "*.yml" | grep -v "^\\./\\." | head -20 || log "No YAML files found anywhere"
                 fi
                 
