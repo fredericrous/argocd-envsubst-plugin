@@ -119,91 +119,97 @@ substitute_env_vars() {
 }
 
 # Main execution
-case "${1:-generate}" in
-    generate)
-        log "Generating manifests with environment substitution"
-        log "Working directory: $(pwd)"
-        # shellcheck disable=SC2012
-        log "Files in directory: $(ls -la 2>&1 | head -5)"
-        
-        # More detailed debugging
-        if [ ! -f "kustomization.yaml" ]; then
-            log "WARNING: kustomization.yaml not found!"
-            log "Checking for kustomization files:"
-            find . -name "kustomization*.yaml" -o -name "Kustomization" 2>&1 | head -10
-            log "All YAML files in current directory:"
-            # shellcheck disable=SC2012,SC2035
-            if ! ls -la *.yaml *.yml 2>/dev/null | head -20; then
-                log "No YAML files in current directory (checking subdirectories)"
-                log "YAML files in subdirectories:"
-                find . -name "*.yaml" -o -name "*.yml" | grep -v "^\\./\\." | head -20 || log "No YAML files found anywhere"
+main() {
+    case "${1:-generate}" in
+        generate)
+            log "Generating manifests with environment substitution"
+            log "Working directory: $(pwd)"
+            # shellcheck disable=SC2012
+            log "Files in directory: $(ls -la 2>&1 | head -5)"
+            
+            # More detailed debugging
+            if [ ! -f "kustomization.yaml" ]; then
+                log "WARNING: kustomization.yaml not found!"
+                log "Checking for kustomization files:"
+                find . -name "kustomization*.yaml" -o -name "Kustomization" 2>&1 | head -10
+                log "All YAML files in current directory:"
+                # shellcheck disable=SC2012,SC2035
+                if ! ls -la *.yaml *.yml 2>/dev/null | head -20; then
+                    log "No YAML files in current directory (checking subdirectories)"
+                    log "YAML files in subdirectories:"
+                    find . -name "*.yaml" -o -name "*.yml" | grep -v "^\\./\\." | head -20 || log "No YAML files found anywhere"
+                fi
+                
+                # Check parent directories
+                log "Checking parent directory:"
+                # shellcheck disable=SC2012
+                ls -la ../ | head -10
+                log "Checking if we're in a subdirectory:"
+                basename "$(pwd)"
             fi
             
-            # Check parent directories
-            log "Checking parent directory:"
-            # shellcheck disable=SC2012
-            ls -la ../ | head -10
-            log "Checking if we're in a subdirectory:"
-            basename "$(pwd)"
-        fi
-        
-        # Load values from ConfigMap
-        if ! load_env_values; then
-            exit 1
-        fi
-        
-        # Generate manifests
-        if [ -f "kustomization.yaml" ]; then
-            log "Building with kustomize"
-            # Capture both stdout and stderr separately
-            kustomize_output=$(mktemp)
-            kustomize_error=$(mktemp)
-            if kustomize build . --enable-helm >"$kustomize_output" 2>"$kustomize_error"; then
-                manifests=$(cat "$kustomize_output")
-                rm -f "$kustomize_output" "$kustomize_error"
-            else
-                log "ERROR: kustomize build failed"
-                if [ -s "$kustomize_error" ]; then
-                    log "STDERR output:"
-                    cat "$kustomize_error" >&2
-                fi
-                if [ -s "$kustomize_output" ]; then
-                    log "STDOUT output (first 500 chars):"
-                    head -c 500 "$kustomize_output" >&2
-                fi
-                rm -f "$kustomize_output" "$kustomize_error"
-                exit 1
+            # Load values from ConfigMap
+            if ! load_env_values; then
+                return 1
             fi
-        else
-            # Check for raw YAML files (including subdirectories)
-            yaml_files=$(find . -name "*.yaml" -o -name "*.yml" | grep -v "^\\./\\." | sort)
-            if [ -n "$yaml_files" ]; then
-                log "Processing raw YAML files"
-                manifests=""
-                for file in $yaml_files; do
-                    log "Processing file: $file"
-                    if [ -n "$manifests" ]; then
-                        manifests="$manifests
+            
+            # Generate manifests
+            if [ -f "kustomization.yaml" ]; then
+                log "Building with kustomize"
+                # Capture both stdout and stderr separately
+                kustomize_output=$(mktemp)
+                kustomize_error=$(mktemp)
+                if kustomize build . --enable-helm >"$kustomize_output" 2>"$kustomize_error"; then
+                    manifests=$(cat "$kustomize_output")
+                    rm -f "$kustomize_output" "$kustomize_error"
+                else
+                    log "ERROR: kustomize build failed"
+                    if [ -s "$kustomize_error" ]; then
+                        log "STDERR output:"
+                        cat "$kustomize_error" >&2
+                    fi
+                    if [ -s "$kustomize_output" ]; then
+                        log "STDOUT output (first 500 chars):"
+                        head -c 500 "$kustomize_output" >&2
+                    fi
+                    rm -f "$kustomize_output" "$kustomize_error"
+                    return 1
+                fi
+            else
+                # Check for raw YAML files (including subdirectories)
+                yaml_files=$(find . -name "*.yaml" -o -name "*.yml" | grep -v "^\\./\\." | sort)
+                if [ -n "$yaml_files" ]; then
+                    log "Processing raw YAML files"
+                    manifests=""
+                    for file in $yaml_files; do
+                        log "Processing file: $file"
+                        if [ -n "$manifests" ]; then
+                            manifests="$manifests
 ---
 $(cat "$file")"
-                    else
-                        manifests=$(cat "$file")
-                    fi
-                done
-            else
-                log "No YAML files found in directory"
-                # Return empty output - ArgoCD will handle this gracefully
-                echo "---"
-                exit 0
+                        else
+                            manifests=$(cat "$file")
+                        fi
+                    done
+                else
+                    log "No YAML files found in directory"
+                    # Return empty output - ArgoCD will handle this gracefully
+                    echo "---"
+                    return 0
+                fi
             fi
-        fi
-        
-        # Substitute variables
-        substitute_env_vars "$manifests"
-        exit 0
-        ;;
-    *)
-        log "Unknown command: $1"
-        exit 1
-        ;;
-esac
+            
+            # Substitute variables
+            substitute_env_vars "$manifests"
+            return 0
+            ;;
+        *)
+            log "Unknown command: $1"
+            return 1
+            ;;
+    esac
+}
+
+# Call main function and exit with its return code
+main "$@"
+exit $?
