@@ -126,8 +126,12 @@ case "${1:-generate}" in
             log "WARNING: kustomization.yaml not found!"
             log "Checking for kustomization files:"
             find . -name "kustomization*.yaml" -o -name "Kustomization" 2>&1 | head -10
-            log "All YAML files in directory:"
-            ls -la *.yaml *.yml 2>/dev/null | head -20 || log "No YAML files found"
+            log "All YAML files in current directory:"
+            if ! ls -la *.yaml *.yml 2>/dev/null | head -20; then
+                log "No YAML files in current directory (checking subdirectories)"
+                log "YAML files in subdirectories:"
+                find . -name "*.yaml" -o -name "*.yml" | grep -v "^\\./\\." | head -20 || log "No YAML files found anywhere"
+            fi
             
             # Check parent directories
             log "Checking parent directory:"
@@ -163,22 +167,28 @@ case "${1:-generate}" in
                 rm -f "$kustomize_output" "$kustomize_error"
                 exit 1
             fi
-        elif compgen -G "*.yaml" >/dev/null || compgen -G "*.yml" >/dev/null; then
-            log "Processing raw YAML files"
-            manifests=""
-            for file in *.yaml *.yml; do
-                [ -f "$file" ] || continue
-                if [ -n "$manifests" ]; then
-                    manifests="$manifests
+        else
+            # Check for raw YAML files (including subdirectories)
+            yaml_files=$(find . -name "*.yaml" -o -name "*.yml" | grep -v "^\\./\\." | sort)
+            if [ -n "$yaml_files" ]; then
+                log "Processing raw YAML files"
+                manifests=""
+                for file in $yaml_files; do
+                    log "Processing file: $file"
+                    if [ -n "$manifests" ]; then
+                        manifests="$manifests
 ---
 $(cat "$file")"
-                else
-                    manifests=$(cat "$file")
-                fi
-            done
-        else
-            log "ERROR: No YAML files found"
-            exit 1
+                    else
+                        manifests=$(cat "$file")
+                    fi
+                done
+            else
+                log "No YAML files found in directory"
+                # Return empty output - ArgoCD will handle this gracefully
+                echo "---"
+                exit 0
+            fi
         fi
         
         # Substitute variables
