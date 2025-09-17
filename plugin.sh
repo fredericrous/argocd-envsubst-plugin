@@ -128,16 +128,23 @@ main() {
             log "Arguments: $@"
             
             # Check if stdin has data
-            if [ ! -t 0 ]; then
-                log "STDIN is available - checking content"
-                stdin_content=$(cat)
-                stdin_lines=$(echo "$stdin_content" | wc -l)
-                log "STDIN contains $stdin_lines lines"
-                log "First 10 lines of STDIN:"
-                echo "$stdin_content" | head -10 >&2
-                log "--- End of STDIN preview ---"
+            stdin_content=""
+            if [ "${ARGOCD_APP_NAME:-}" != "" ]; then
+                # We're being called by ArgoCD - check for stdin
+                log "Running in ArgoCD context (ARGOCD_APP_NAME=$ARGOCD_APP_NAME)"
+                if read -t 0.1 -N 1 firstchar 2>/dev/null; then
+                    log "STDIN is available - reading content"
+                    stdin_content="${firstchar}$(cat)"
+                    stdin_lines=$(echo "$stdin_content" | wc -l)
+                    log "STDIN contains $stdin_lines lines"
+                    log "First 10 lines of STDIN:"
+                    echo "$stdin_content" | head -10 >&2
+                    log "--- End of STDIN preview ---"
+                else
+                    log "No STDIN input in ArgoCD context"
+                fi
             else
-                log "No STDIN input detected"
+                log "Not running in ArgoCD context - skipping STDIN check"
             fi
             
             # shellcheck disable=SC2012
