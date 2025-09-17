@@ -125,6 +125,21 @@ main() {
         generate)
             log "Generating manifests with environment substitution"
             log "Working directory: $(pwd)"
+            log "Arguments: $@"
+            
+            # Check if stdin has data
+            if [ ! -t 0 ]; then
+                log "STDIN is available - checking content"
+                stdin_content=$(cat)
+                stdin_lines=$(echo "$stdin_content" | wc -l)
+                log "STDIN contains $stdin_lines lines"
+                log "First 10 lines of STDIN:"
+                echo "$stdin_content" | head -10 >&2
+                log "--- End of STDIN preview ---"
+            else
+                log "No STDIN input detected"
+            fi
+            
             # shellcheck disable=SC2012
             log "Files in directory: $(ls -la 2>&1 | head -5)"
             
@@ -159,7 +174,10 @@ main() {
             fi
             
             # Generate manifests
-            if [ -f "kustomization.yaml" ]; then
+            if [ ! -t 0 ] && [ -n "$stdin_content" ]; then
+                log "Processing manifests from STDIN"
+                manifests="$stdin_content"
+            elif [ -f "kustomization.yaml" ]; then
                 log "Building with kustomize"
                 # Capture both stdout and stderr separately
                 kustomize_output=$(mktemp)
