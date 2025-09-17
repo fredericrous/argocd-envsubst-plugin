@@ -11,7 +11,7 @@ spec:
         - sh
         - -c
         - |
-          find . -name '*.yaml' -o -name '*.yml' | xargs grep -l '\${ARGO_' 2>/dev/null | head -1
+          find . -name '*.yaml' -o -name '*.yml' | xargs grep -l '\${ARGO_' 2>/dev/null | grep .
   generate:
     command: ["/usr/local/bin/argocd-envsubst-plugin", "generate"]
   # Preserve all files when copying to plugin
